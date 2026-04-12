@@ -36,18 +36,22 @@ HustleAI is an AI-powered side hustle recommendation platform that helps users d
 - Calendar view with milestone tracking
 
 ### 5. Subscription & Monetization (Stripe)
-| Tier | Price | Business Plans | Side Hustles |
-|------|-------|---------------|-------------|
-| Free | $0 | 1 trial plan, then locked | Unlimited discovery |
-| Starter | $9.99/mo | 10/month | Unlimited |
-| Pro | $29.99/mo | Unlimited | Unlimited |
-| À la carte | $4.99 each | Per individual plan | N/A |
+| Tier | Price | Business Plans | Launch Kits | Side Hustles |
+|------|-------|---------------|-------------|-------------|
+| Free | $0 | 1 trial plan | ❌ | 3-5 starter only (premium blurred) |
+| Starter | $9.99/mo | 10/month | 2/month | All unlocked |
+| Pro | $29.99/mo | Unlimited | 5/month | All unlocked |
+| Empire | $49.99/mo | Unlimited | Unlimited | All unlocked |
+| À la carte | $4.99/plan | Per plan | — | — |
+| À la carte | $2.99/kit | — | Per kit | — |
 
 **Monetization Strategy:**
-- Free users get unlimited side hustle discovery (recommendations, income estimates, categories)
-- First business plan is free as a trial to demonstrate value
-- After trial, business plans require either subscription or à la carte purchase
-- Paywall modal appears on hustle detail page with 3 purchase options: à la carte ($4.99), Starter, Pro
+- Free users discover starter hustles (low cost, $100-$500/week) with full details
+- Premium hustles ($1K-$5K/week) shown with revenue potential visible but name/details blurred — creates FOMO
+- Tapping locked hustle shows upgrade modal with "Unlock Premium Hustles" CTA
+- First business plan is free trial, subsequent plans require upgrade or à la carte
+- Hustle Launch Kit: AI-generated landing page, 5 social media posts, elevator pitch, brand colors
+- Referral program: Give $5 credit / Get 1 free business plan per referral
 
 ### 6. Dashboard & Navigation
 - Bottom tab navigation: Dashboard, My Hustles, Calendar, Profile
