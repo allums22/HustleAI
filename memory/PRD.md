@@ -35,12 +35,19 @@ HustleAI is an AI-powered side hustle recommendation platform that helps users d
 - Includes: overview, daily tasks (30 days), milestones (Days 7, 14, 21, 30), resources needed, estimated costs
 - Calendar view with milestone tracking
 
-### 5. Subscription Tiers (Stripe)
-| Tier | Price | Side Hustles |
-|------|-------|-------------|
-| Free | $0 | 2 |
-| Starter | $9.99/mo | 10 |
-| Pro | $29.99/mo | Unlimited |
+### 5. Subscription & Monetization (Stripe)
+| Tier | Price | Business Plans | Side Hustles |
+|------|-------|---------------|-------------|
+| Free | $0 | 1 trial plan, then locked | Unlimited discovery |
+| Starter | $9.99/mo | 10/month | Unlimited |
+| Pro | $29.99/mo | Unlimited | Unlimited |
+| À la carte | $4.99 each | Per individual plan | N/A |
+
+**Monetization Strategy:**
+- Free users get unlimited side hustle discovery (recommendations, income estimates, categories)
+- First business plan is free as a trial to demonstrate value
+- After trial, business plans require either subscription or à la carte purchase
+- Paywall modal appears on hustle detail page with 3 purchase options: à la carte ($4.99), Starter, Pro
 
 ### 6. Dashboard & Navigation
 - Bottom tab navigation: Dashboard, My Hustles, Calendar, Profile
