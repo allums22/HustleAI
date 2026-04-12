@@ -1,0 +1,128 @@
+{
+  "theme_archetype": {
+    "domain": "Productivity, Finance, Career",
+    "theme": "Light Theme",
+    "archetype": "Hybrid of 1 (Organic & Earthy) & 4 (Swiss & High-Contrast)",
+    "description": "A highly functional, professional, and trustworthy interface designed to convert. Fulfills the explicit user request of Elevated Neutrals (60%), Trust Blue & Growth Green (30%), and Hyper-Saturated Orange/Red (10%) for CTA urgency. The vibe is optimistic yet highly actionable.",
+    "emotional_tone": "Trustworthy, Action-Oriented, Clear, Optimistic"
+  },
+  "colors": {
+    "rule": "60-30-10 Rule strictly enforced. 60% Neutrals, 30% Blue/Green, 10% Orange/Red.",
+    "elevated_neutrals_60": {
+      "background": "bg-stone-50",
+      "surface": "bg-white",
+      "surface_hover": "bg-stone-100",
+      "border": "border-stone-200"
+    },
+    "primary_trust_and_growth_30": {
+      "trust_blue": "bg-blue-600",
+      "trust_blue_hover": "bg-blue-700",
+      "trust_blue_text": "text-blue-600",
+      "growth_green": "bg-emerald-600",
+      "growth_green_text": "text-emerald-700"
+    },
+    "accent_conversion_10": {
+      "big_orange_cta": "bg-orange-600",
+      "big_orange_cta_hover": "bg-orange-700",
+      "big_orange_text": "text-white",
+      "urgent_red": "bg-red-600"
+    },
+    "text": {
+      "primary": "text-stone-900",
+      "secondary": "text-stone-500",
+      "tertiary": "text-stone-400",
+      "on_color": "text-white"
+    }
+  },
+  "typography": {
+    "fonts": {
+      "headings": "Outfit, sans-serif",
+      "body": "Figtree, sans-serif"
+    },
+    "scale": {
+      "h1_hero": "text-4xl sm:text-5xl lg:text-6xl tracking-tight font-bold",
+      "h2_section": "text-2xl sm:text-3xl lg:text-4xl tracking-tight font-semibold",
+      "h3_card": "text-xl sm:text-2xl font-medium",
+      "body_large": "text-lg leading-relaxed",
+      "body_base": "text-base leading-relaxed",
+      "small_label": "text-sm tracking-wide uppercase font-semibold text-stone-500"
+    },
+    "rules": [
+      "No generic sans for headings. Always use Outfit.",
+      "Ensure tight letter spacing (-0.02em to -0.04em) on all headings.",
+      "Labels and overlines must be tiny, uppercase, and widely tracked (tracking-[0.2em])."
+    ]
+  },
+  "spacing_and_layout": {
+    "system": "Generous spacing. Use p-6 or p-8 for internal card padding to prevent collision.",
+    "grids": {
+      "dashboard": "Control Room Grid: grid-cols-1 md:grid-cols-3 lg:grid-cols-4 with gap-6. Tight density for analytics.",
+      "marketing": "Tetris Grid: grid-cols-1 md:grid-cols-12 with gap-8. Asymmetrical spans."
+    },
+    "surfaces": {
+      "cards": "bg-white border border-stone-200 rounded-lg shadow-sm. Max 8px border-radius.",
+      "glass_header": "bg-white/80 backdrop-blur-xl border-b border-stone-200/50 sticky top-0 z-50",
+      "interactive_hover": "-translate-y-1 shadow-md transition-all duration-200"
+    }
+  },
+  "components_strategy": {
+    "buttons": {
+      "primary_conversion": "The 'Big Orange Button'. Use bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-lg px-8 py-3 shadow-sm. Used strictly for checkout, upgrades, and final commitments.",
+      "secondary_action": "Trust Blue. bg-blue-600 text-white rounded-lg for navigation and standard actions.",
+      "outline": "border border-stone-300 text-stone-700 hover:bg-stone-50 for secondary choices."
+    },
+    "inputs_and_forms": {
+      "style": "Shadcn standard but heavily customized. rounded-lg, border-stone-300, focus:ring-2 focus:ring-blue-500 focus:border-blue-500.",
+      "questionnaire": "Immersive, one-question-per-screen layout with a thick emerald-600 progress bar at the top."
+    },
+    "charts_and_data": {
+      "library": "Recharts / Shadcn charts",
+      "styling": "Use emerald-600 for positive growth metrics, blue-600 for stable volume metrics."
+    },
+    "pricing_cards": {
+      "style": "Bento-style layout. The 'Mid' tier (10 side hustles) MUST have a 'Most Popular' badge, an electric blue border (border-blue-500 border-2), and the Big Orange Button for its CTA to drive 25-35% higher conversions."
+    }
+  },
+  "navigation": {
+    "desktop": "Top fixed glassmorphism header. Logo left, links center, Profile/Upgrade CTA right.",
+    "mobile": "Bottom tab bar for logged-in app experience (Dashboard, Calendar, Hustles, Profile). Standard hamburger for marketing/logged-out."
+  },
+  "motion_and_interaction": {
+    "hover_states": "All cards lift slightly (-translate-y-1). All buttons have color shifts.",
+    "page_transitions": "Subtle fade-in and slide-up (framer-motion or simple CSS transition) for the questionnaire steps.",
+    "accessibility": "Respect prefers-reduced-motion. High contrast focus rings (focus:ring-2 focus:ring-blue-600 focus:outline-none)."
+  },
+  "media_and_icons": {
+    "icons_library": "@phosphor-icons/react",
+    "icons_usage": "Use Duotone weight for marketing pages, Regular weight for app dashboard.",
+    "image_urls": {
+      "marketing_hero": {
+        "url": "https://images.unsplash.com/photo-1558478551-1a378f63328e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHwxfHxjbGVhbiUyMG1vZGVybiUyMG1pbmltYWwlMjBkZXNrJTIwd29ya3NwYWNlJTIwbGFwdG9wJTIwcGxhbm5lcnxlbnwwfHx8fDE3NzU5NjY1NjB8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Clean modern desk with planner and laptop. Use in the hero section for the unauthenticated landing page.",
+        "placement": "Landing page hero section right side or background"
+      },
+      "success_dashboard_empty_state": {
+        "url": "https://images.unsplash.com/photo-1634313907443-38338d5235dc?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njl8MHwxfHNlYXJjaHwxfHxoYXBweSUyMHBlcnNvbiUyMGxvb2tpbmclMjBhdCUyMHBob25lJTIwc3VjY2Vzc3xlbnwwfHx8fDE3NzU5NjY1NjB8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Happy person looking at phone. Use for successful onboarding, side hustle generation loading screen, or empty state.",
+        "placement": "App loading screen or 'Generating Hustles' intermediate step"
+      },
+      "abstract_accent": {
+        "url": "https://images.unsplash.com/photo-1770954098244-7987240e01c7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzN8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMHNvZnQlMjB3YXZlJTIwYmFja2dyb3VuZCUyMGxpZ2h0fGVufDB8fHx8MTc3NTk2NjU2MHww&ixlib=rb-4.1.0&q=85",
+        "description": "Abstract blend. Use with low opacity as a background element behind the pricing tier or questionnaire section to add visual depth.",
+        "placement": "Background decoration for pricing section"
+      }
+    }
+  },
+  "testing_and_qa": {
+    "attributes": "All interactive and key informational elements MUST include a data-testid attribute in kebab-case (e.g., data-testid='upgrade-pro-button')."
+  },
+  "instructions_to_main_agent": [
+    "Do not use generic Inter font. Import and use Outfit for headings and Figtree for body text.",
+    "Implement the 60-30-10 color rule. Keep the background in stone-50, primary buttons blue-600, success states emerald-600, and checkout/upgrade CTAs orange-600.",
+    "For the Stripe pricing page, place a 'Most Popular' badge on the Mid-tier plan and outline it in blue.",
+    "The questionnaire should feel immersive. Hide standard navigation during the questionnaire to prevent distraction.",
+    "Ensure the generated side hustle calendar uses the Growth Green (emerald-600) to signify progress and action.",
+    "Add 'data-testid' to every button, form input, and interactive card.",
+    "Use Phosphor Icons (@phosphor-icons/react) instead of lucide-react."
+  ]
+}
