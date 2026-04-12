@@ -106,6 +106,22 @@ export default function HustlesScreen() {
                 <Text style={[styles.diffText, { color: h.difficulty === 'Easy' ? Colors.growthGreen : h.difficulty === 'Hard' ? Colors.orangeCTA : Colors.trustBlue }]}>{h.difficulty}</Text>
               </View>
             </View>
+
+            {/* Launch Kit Preview */}
+            <View style={styles.kitPreview}>
+              <View style={styles.kitPreviewHeader}>
+                <Ionicons name="rocket" size={14} color={Colors.gold} />
+                <Text style={styles.kitPreviewTitle}>Launch Kit Available</Text>
+              </View>
+              <View style={styles.kitPreviewItems}>
+                {['Website', 'Social Posts', 'Pitch', 'Branding'].map((item, ki) => (
+                  <View key={ki} style={styles.kitPreviewItem}>
+                    <Ionicons name={ki === 0 ? 'globe-outline' : ki === 1 ? 'megaphone-outline' : ki === 2 ? 'mic-outline' : 'color-palette-outline'} size={10} color={Colors.textTertiary} />
+                    <Text style={styles.kitPreviewItemText}>{item}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -171,6 +187,12 @@ const styles = StyleSheet.create({
   metaText: { fontSize: 12, color: Colors.textSecondary },
   diffBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginLeft: 'auto' },
   diffText: { fontSize: 11, fontWeight: '700' },
+  kitPreview: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border },
+  kitPreviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  kitPreviewTitle: { fontSize: 12, fontWeight: '700', color: Colors.gold },
+  kitPreviewItems: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  kitPreviewItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  kitPreviewItemText: { fontSize: 10, color: Colors.textTertiary },
   modalOverlay: { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'center', paddingHorizontal: 24 },
   modalContent: { backgroundColor: Colors.surface, borderRadius: 20, padding: 28, alignItems: 'center' },
   modalClose: { alignSelf: 'flex-end', padding: 4 },

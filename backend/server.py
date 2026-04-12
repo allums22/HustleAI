@@ -74,7 +74,7 @@ QUESTIONNAIRE_QUESTIONS = [
     {"id": "profession", "question": "What's your current profession or field?", "type": "single_select",
      "options": ["Technology", "Business/Finance", "Creative/Design", "Healthcare", "Education", "Sales/Marketing", "Trades/Manual", "Student", "Other"]},
     {"id": "skills", "question": "Select your top skills", "type": "multi_select",
-     "options": ["Writing", "Programming", "Design", "Marketing", "Sales", "Teaching", "Photography", "Video Editing", "Data Analysis", "Public Speaking", "Social Media", "Cooking", "Fitness Training", "Music", "Crafting/DIY"]},
+     "options": ["Writing", "Programming", "Design", "Marketing", "Sales", "Teaching", "Photography", "Video Editing", "Data Analysis", "Public Speaking", "Social Media", "Cooking", "Fitness Training", "Music", "Crafting/DIY", "Other"]},
     {"id": "hours_per_week", "question": "How many hours per week can you dedicate?", "type": "single_select",
      "options": ["Less than 5", "5-10", "10-20", "20-30", "30+"]},
     {"id": "budget", "question": "What's your startup budget?", "type": "single_select",
@@ -82,7 +82,7 @@ QUESTIONNAIRE_QUESTIONS = [
     {"id": "income_goal", "question": "What's your monthly income goal?", "type": "single_select",
      "options": ["$100-$500", "$500-$1000", "$1000-$3000", "$3000-$5000", "$5000+"]},
     {"id": "interests", "question": "What areas interest you most?", "type": "multi_select",
-     "options": ["E-commerce", "Freelancing", "Content Creation", "Consulting", "Digital Products", "Real Estate", "Investing", "Teaching/Tutoring", "App Development", "Physical Products", "Service Business", "Passive Income"]},
+     "options": ["E-commerce", "Freelancing", "Content Creation", "Consulting", "Digital Products", "Real Estate", "Investing", "Teaching/Tutoring", "App Development", "Physical Products", "Service Business", "Passive Income", "Other"]},
     {"id": "risk_tolerance", "question": "What's your risk tolerance?", "type": "single_select",
      "options": ["Very Low - I want guaranteed income", "Low - Minimal risk preferred", "Medium - Balanced approach", "High - Willing to take risks", "Very High - Go big or go home"]},
     {"id": "work_style", "question": "How do you prefer to work?", "type": "single_select",
@@ -335,11 +335,11 @@ async def generate_hustles(user: dict = Depends(get_current_user)):
     additional_skills = qr.get("additional_skills", "")
     resume_text = qr.get("resume_text", "")
 
-    prompt = f"""Based on the following user profile, generate exactly 8 personalized side hustle recommendations.
+    prompt = f"""Based on the following user profile, generate exactly 12 personalized side hustle recommendations.
 
 IMPORTANT: Generate TWO categories:
-- First 3 hustles must be "starter" tier: Low/no startup cost, earning $100-$500/week. These are beginner-friendly.
-- Next 5 hustles must be "premium" tier: Higher earning $1000-$5000/week potential. May require some investment or advanced skills.
+- First 5 hustles must be "starter" tier: Low/no startup cost, earning $100-$500/week. Beginner-friendly, can start today.
+- Next 7 hustles must be "premium" tier: Higher earning $1000-$5000/week potential. May require investment or advanced skills.
 
 User Profile:
 - Profession: {answers.get('profession', 'Not specified')}
@@ -355,7 +355,7 @@ User Profile:
 - Additional skills: {additional_skills or 'None'}
 - Resume: {resume_text[:500] if resume_text else 'None'}
 
-Return ONLY a JSON array of 8 objects. Each must have:
+Return ONLY a JSON array of 12 objects. Each must have:
 - "name": string
 - "description": string (2-3 sentences)
 - "potential_income": string (e.g. "$200-$400/week" for starter, "$1500-$3000/week" for premium)
@@ -421,6 +421,8 @@ async def get_hustles(user: dict = Depends(get_current_user)):
         else:
             h_copy["locked"] = False
         result.append(h_copy)
+    # Sort: starter first, then premium
+    result.sort(key=lambda x: (0 if x.get("hustle_tier") == "starter" else 1, x.get("created_at", "")))
     return {"hustles": result}
 
 @api_router.get("/hustles/{hustle_id}")

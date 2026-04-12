@@ -1,35 +1,43 @@
-// Design system colors following 60-30-10 rule
-// 60% Neutrals, 30% Blue/Green Trust, 10% Orange/Red Conversion
+// Premium Dark Theme — Deep Navy + Amber/Gold
+// Designed to feel like a $500/month business consulting tool
 export const Colors = {
-  // Neutrals (60%)
-  background: '#FAFAF9',
-  surface: '#FFFFFF',
-  surfaceHover: '#F5F5F4',
-  border: '#E7E5E4',
-  borderLight: '#F5F5F4',
+  // Backgrounds (Deep Navy)
+  background: '#0F172A',
+  surface: '#1E293B',
+  surfaceHover: '#334155',
+  surfaceElevated: '#253349',
+  border: '#334155',
+  borderLight: '#1E293B',
 
-  // Primary Trust & Growth (30%)
-  trustBlue: '#2563EB',
-  trustBlueHover: '#1D4ED8',
-  trustBlueLight: '#DBEAFE',
-  growthGreen: '#059669',
-  growthGreenLight: '#D1FAE5',
-  growthGreenText: '#047857',
+  // Primary Trust Blue
+  trustBlue: '#3B82F6',
+  trustBlueHover: '#2563EB',
+  trustBlueLight: '#1E3A5F',
 
-  // Accent Conversion (10%)
-  orangeCTA: '#EA580C',
-  orangeCTAHover: '#C2410C',
-  orangeLight: '#FFF7ED',
-  urgentRed: '#DC2626',
-  urgentRedLight: '#FEE2E2',
+  // Growth Green
+  growthGreen: '#10B981',
+  growthGreenLight: '#064E3B',
+  growthGreenText: '#34D399',
 
-  // Text
-  textPrimary: '#1C1917',
-  textSecondary: '#78716C',
-  textTertiary: '#A8A29E',
+  // Accent — Amber/Gold (Premium CTA)
+  orangeCTA: '#F59E0B',
+  orangeCTAHover: '#D97706',
+  orangeLight: '#78350F',
+
+  // Urgent Red
+  urgentRed: '#EF4444',
+  urgentRedLight: '#7F1D1D',
+
+  // Text (Light on Dark)
+  textPrimary: '#F8FAFC',
+  textSecondary: '#94A3B8',
+  textTertiary: '#64748B',
   textOnColor: '#FFFFFF',
+  textOnDark: '#F8FAFC',
 
   // Misc
-  overlay: 'rgba(0,0,0,0.5)',
-  shadow: 'rgba(0,0,0,0.08)',
+  overlay: 'rgba(0,0,0,0.7)',
+  shadow: 'rgba(0,0,0,0.4)',
+  gold: '#F59E0B',
+  goldLight: '#FEF3C7',
 };

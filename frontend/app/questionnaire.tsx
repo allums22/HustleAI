@@ -23,6 +23,7 @@ export default function QuestionnaireScreen() {
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [additionalSkills, setAdditionalSkills] = useState('');
   const [resumeText, setResumeText] = useState('');
+  const [otherTexts, setOtherTexts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -184,6 +185,27 @@ export default function QuestionnaireScreen() {
                   );
                 })}
               </View>
+
+              {/* "Other" text input — shows when Other is selected */}
+              {(() => {
+                const qId = questions[currentStep]?.id;
+                const hasOther = questions[currentStep]?.type === 'multi_select'
+                  ? (answers[qId] || []).includes('Other')
+                  : answers[qId] === 'Other';
+                return hasOther ? (
+                  <View style={styles.otherInputSection}>
+                    <Text style={styles.otherLabel}>Please specify:</Text>
+                    <TextInput
+                      testID={`other-input-${qId}`}
+                      style={styles.otherInput}
+                      placeholder="Type your answer..."
+                      placeholderTextColor={Colors.textTertiary}
+                      value={otherTexts[qId] || ''}
+                      onChangeText={(t) => setOtherTexts({ ...otherTexts, [qId]: t })}
+                    />
+                  </View>
+                ) : null;
+              })()}
             </View>
           ) : (
             <View style={styles.questionContainer}>
@@ -293,11 +315,14 @@ const styles = StyleSheet.create({
   helperText: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20 },
   optionsGrid: { gap: 10, marginTop: 8 },
   optionBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.surface, borderWidth: 1.5, borderColor: Colors.border, borderRadius: 12, padding: 16 },
-  optionBtnSelected: { borderColor: Colors.trustBlue, backgroundColor: Colors.trustBlueLight },
+  optionBtnSelected: { borderColor: Colors.gold, backgroundColor: Colors.orangeLight },
   optionCheck: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: Colors.border, justifyContent: 'center', alignItems: 'center' },
-  optionCheckSelected: { backgroundColor: Colors.trustBlue, borderColor: Colors.trustBlue },
+  optionCheckSelected: { backgroundColor: Colors.gold, borderColor: Colors.gold },
   optionText: { fontSize: 15, color: Colors.textPrimary, flex: 1 },
-  optionTextSelected: { fontWeight: '600', color: Colors.trustBlue },
+  optionTextSelected: { fontWeight: '600', color: Colors.gold },
+  otherInputSection: { marginTop: 8, gap: 4 },
+  otherLabel: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
+  otherInput: { backgroundColor: Colors.surfaceElevated, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, padding: 12, fontSize: 15, color: Colors.textPrimary },
   inputSection: { gap: 6, marginTop: 8 },
   inputLabel: { fontSize: 13, fontWeight: '600', color: Colors.textPrimary, textTransform: 'uppercase', letterSpacing: 0.5 },
   textArea: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 12, padding: 14, fontSize: 15, color: Colors.textPrimary, minHeight: 80 },
