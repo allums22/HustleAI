@@ -1,61 +1,74 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  ActivityIndicator, Alert,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Platform, Share } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
 import { api } from '../../src/api';
 import { Colors } from '../../src/colors';
+import * as Clipboard from 'expo-clipboard';
 
 export default function ProfileScreen() {
-  const { user, logout, refreshUser } = useAuth();
+  const { user, logout } = useAuth();
   const router = useRouter();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
+  useEffect(() => { loadProfile(); }, []);
 
   const loadProfile = async () => {
-    try {
-      const res = await api.getProfile();
-      setProfile(res);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+    try { setProfile(await api.getProfile()); } catch (e) { console.error(e); }
+    finally { setLoading(false); }
   };
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
+    Alert.alert('Logout', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: async () => {
-        await logout();
-        router.replace('/');
-      }},
+      { text: 'Logout', style: 'destructive', onPress: async () => { await logout(); router.replace('/'); }},
     ]);
   };
 
-  if (loading) {
-    return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={Colors.trustBlue} /></View>;
-  }
+  const handleShareReferral = async () => {
+    const code = profile?.stats?.referral_code || '';
+    const url = Platform.OS === 'web' ? `${window.location.origin}/register?ref=${code}` : `https://hustleai.com/register?ref=${code}`;
+    const msg = `Join me on HustleAI! Get your first business plan FREE. Use my referral code: ${code}\n${url}`;
+    try {
+      if (Platform.OS === 'web') {
+        await navigator.clipboard.writeText(msg);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } else {
+        await Share.share({ message: msg });
+      }
+    } catch {}
+  };
+
+  const handleCopyCode = async () => {
+    const code = profile?.stats?.referral_code || '';
+    try {
+      if (Platform.OS === 'web') {
+        await navigator.clipboard.writeText(code);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  };
+
+  if (loading) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={Colors.trustBlue} /></View>;
 
   const tier = profile?.subscription?.tier || 'free';
   const tierName = profile?.subscription?.name || 'Free';
+  const tierColors: Record<string, string> = { free: Colors.trustBlue, starter: Colors.growthGreen, pro: Colors.trustBlue, empire: Colors.orangeCTA };
 
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>Profile</Text>
 
-        {/* User Info Card */}
+        {/* User Card */}
         <View style={styles.userCard}>
-          <View style={styles.avatarCircle}>
+          <View style={[styles.avatar, { backgroundColor: tierColors[tier] || Colors.trustBlue }]}>
             <Text style={styles.avatarText}>{(user?.name || 'U')[0].toUpperCase()}</Text>
           </View>
           <View style={styles.userInfo}>
@@ -64,68 +77,88 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Subscription Card */}
-        <View style={styles.subscriptionCard}>
+        {/* Subscription */}
+        <View style={styles.subCard}>
           <View style={styles.subHeader}>
             <View>
               <Text style={styles.subLabel}>Current Plan</Text>
               <Text style={styles.subTier}>{tierName}</Text>
             </View>
-            <View style={[styles.tierIcon, tier === 'pro' ? styles.tierIconPro : tier === 'starter' ? styles.tierIconStarter : styles.tierIconFree]}>
-              <Ionicons
-                name={tier === 'pro' ? 'diamond' : tier === 'starter' ? 'star' : 'flash'}
-                size={20}
-                color={Colors.textOnColor}
-              />
+            <View style={[styles.tierIcon, { backgroundColor: tierColors[tier] || Colors.trustBlue }]}>
+              <Ionicons name={tier === 'empire' ? 'trophy' : tier === 'pro' ? 'diamond' : tier === 'starter' ? 'star' : 'flash'} size={20} color={Colors.textOnColor} />
             </View>
           </View>
-
-          <View style={styles.subStats}>
-            <View style={styles.subStatItem}>
-              <Text style={styles.subStatNum}>{profile?.stats?.total_hustles || 0}</Text>
-              <Text style={styles.subStatLabel}>Hustles</Text>
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={styles.statNum}>{profile?.stats?.total_hustles || 0}</Text>
+              <Text style={styles.statLbl}>Hustles</Text>
             </View>
-            <View style={styles.subStatDivider} />
-            <View style={styles.subStatItem}>
-              <Text style={styles.subStatNum}>{profile?.stats?.plans_generated || 0}</Text>
-              <Text style={styles.subStatLabel}>Plans</Text>
+            <View style={styles.statDiv} />
+            <View style={styles.statItem}>
+              <Text style={styles.statNum}>{profile?.stats?.plans_generated || 0}</Text>
+              <Text style={styles.statLbl}>Plans</Text>
             </View>
-            <View style={styles.subStatDivider} />
-            <View style={styles.subStatItem}>
-              <Text style={styles.subStatNum}>
-                {tier === 'pro' ? '∞' : profile?.stats?.remaining_plans ?? 0}
-              </Text>
-              <Text style={styles.subStatLabel}>Remaining</Text>
+            <View style={styles.statDiv} />
+            <View style={styles.statItem}>
+              <Text style={styles.statNum}>{profile?.stats?.kits_generated || 0}</Text>
+              <Text style={styles.statLbl}>Kits</Text>
+            </View>
+            <View style={styles.statDiv} />
+            <View style={styles.statItem}>
+              <Text style={styles.statNum}>{tier === 'empire' || tier === 'pro' ? '∞' : profile?.stats?.remaining_plans ?? 0}</Text>
+              <Text style={styles.statLbl}>Plans Left</Text>
             </View>
           </View>
-
-          {tier !== 'pro' && (
-            <TouchableOpacity
-              testID="upgrade-plan-btn"
-              style={styles.upgradeBtn}
-              onPress={() => router.push('/pricing')}
-              activeOpacity={0.8}
-            >
+          {tier !== 'empire' && (
+            <TouchableOpacity testID="upgrade-plan-btn" style={styles.upgradeBtn} onPress={() => router.push('/pricing')}>
               <Ionicons name="arrow-up-circle" size={18} color={Colors.textOnColor} />
               <Text style={styles.upgradeBtnText}>Upgrade Plan</Text>
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Menu Items */}
+        {/* Referral Section */}
+        <View style={styles.referralCard}>
+          <View style={styles.referralHeader}>
+            <Ionicons name="gift" size={22} color={Colors.orangeCTA} />
+            <Text style={styles.referralTitle}>Refer & Earn</Text>
+          </View>
+          <Text style={styles.referralDesc}>
+            Share your code. Friends get a free business plan. You get $5 credit per referral!
+          </Text>
+          <View style={styles.codeRow}>
+            <View style={styles.codeBox}>
+              <Text style={styles.codeText}>{profile?.stats?.referral_code || '...'}</Text>
+            </View>
+            <TouchableOpacity testID="copy-code-btn" style={styles.copyBtn} onPress={handleCopyCode}>
+              <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={18} color={Colors.textOnColor} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.referralStats}>
+            <View style={styles.refStatItem}>
+              <Text style={styles.refStatNum}>{profile?.stats?.referral_count || 0}</Text>
+              <Text style={styles.refStatLbl}>Referrals</Text>
+            </View>
+            <View style={styles.refStatItem}>
+              <Text style={styles.refStatNum}>${(profile?.stats?.referral_credits || 0).toFixed(2)}</Text>
+              <Text style={styles.refStatLbl}>Credits</Text>
+            </View>
+          </View>
+          <TouchableOpacity testID="share-referral-btn" style={styles.shareBtn} onPress={handleShareReferral}>
+            <Ionicons name="share-social" size={18} color={Colors.trustBlue} />
+            <Text style={styles.shareBtnText}>Share Referral Link</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Menu */}
         <View style={styles.menuSection}>
           <TouchableOpacity testID="retake-quiz-btn" style={styles.menuItem} onPress={() => router.push('/questionnaire')}>
-            <View style={[styles.menuIcon, { backgroundColor: Colors.trustBlueLight }]}>
-              <Ionicons name="create-outline" size={18} color={Colors.trustBlue} />
-            </View>
+            <View style={[styles.menuIcon, { backgroundColor: Colors.trustBlueLight }]}><Ionicons name="create-outline" size={18} color={Colors.trustBlue} /></View>
             <Text style={styles.menuText}>Retake Assessment</Text>
             <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
           </TouchableOpacity>
-
           <TouchableOpacity testID="pricing-menu-btn" style={styles.menuItem} onPress={() => router.push('/pricing')}>
-            <View style={[styles.menuIcon, { backgroundColor: Colors.orangeLight }]}>
-              <Ionicons name="pricetag-outline" size={18} color={Colors.orangeCTA} />
-            </View>
+            <View style={[styles.menuIcon, { backgroundColor: Colors.orangeLight }]}><Ionicons name="pricetag-outline" size={18} color={Colors.orangeCTA} /></View>
             <Text style={styles.menuText}>Pricing Plans</Text>
             <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
           </TouchableOpacity>
@@ -144,28 +177,39 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background },
   scroll: { paddingHorizontal: 24, paddingBottom: 40 },
-  title: { fontSize: 24, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.5, paddingTop: 16, marginBottom: 20 },
+  title: { fontSize: 24, fontWeight: '800', color: Colors.textPrimary, paddingTop: 16, marginBottom: 20 },
   userCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: Colors.surface, borderRadius: 14, padding: 18, borderWidth: 1, borderColor: Colors.border, marginBottom: 16 },
-  avatarCircle: { width: 52, height: 52, borderRadius: 26, backgroundColor: Colors.trustBlue, justifyContent: 'center', alignItems: 'center' },
+  avatar: { width: 52, height: 52, borderRadius: 26, justifyContent: 'center', alignItems: 'center' },
   avatarText: { fontSize: 22, fontWeight: '800', color: Colors.textOnColor },
   userInfo: { flex: 1 },
   userName: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary },
   userEmail: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
-  subscriptionCard: { backgroundColor: Colors.surface, borderRadius: 14, padding: 18, borderWidth: 1, borderColor: Colors.border, marginBottom: 16, gap: 14 },
+  subCard: { backgroundColor: Colors.surface, borderRadius: 14, padding: 18, borderWidth: 1, borderColor: Colors.border, marginBottom: 16, gap: 14 },
   subHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  subLabel: { fontSize: 12, fontWeight: '600', color: Colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  subLabel: { fontSize: 12, fontWeight: '600', color: Colors.textTertiary, textTransform: 'uppercase' },
   subTier: { fontSize: 22, fontWeight: '800', color: Colors.textPrimary },
   tierIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  tierIconFree: { backgroundColor: Colors.trustBlue },
-  tierIconStarter: { backgroundColor: Colors.growthGreen },
-  tierIconPro: { backgroundColor: Colors.orangeCTA },
-  subStats: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
-  subStatItem: { flex: 1, alignItems: 'center' },
-  subStatNum: { fontSize: 22, fontWeight: '800', color: Colors.textPrimary },
-  subStatLabel: { fontSize: 11, color: Colors.textSecondary, marginTop: 2 },
-  subStatDivider: { width: 1, height: 30, backgroundColor: Colors.border },
+  statsRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
+  statItem: { flex: 1, alignItems: 'center' },
+  statNum: { fontSize: 20, fontWeight: '800', color: Colors.textPrimary },
+  statLbl: { fontSize: 10, color: Colors.textSecondary, marginTop: 2 },
+  statDiv: { width: 1, height: 28, backgroundColor: Colors.border },
   upgradeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.orangeCTA, paddingVertical: 14, borderRadius: 12 },
   upgradeBtnText: { fontSize: 15, fontWeight: '700', color: Colors.textOnColor },
+  referralCard: { backgroundColor: Colors.surface, borderRadius: 14, padding: 18, borderWidth: 1, borderColor: Colors.orangeCTA + '40', marginBottom: 16 },
+  referralHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  referralTitle: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary },
+  referralDesc: { fontSize: 13, color: Colors.textSecondary, lineHeight: 18, marginBottom: 12 },
+  codeRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  codeBox: { flex: 1, backgroundColor: Colors.background, borderRadius: 10, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: Colors.border },
+  codeText: { fontSize: 20, fontWeight: '800', color: Colors.textPrimary, letterSpacing: 3 },
+  copyBtn: { width: 48, borderRadius: 10, backgroundColor: Colors.trustBlue, justifyContent: 'center', alignItems: 'center' },
+  referralStats: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  refStatItem: { flex: 1, backgroundColor: Colors.background, borderRadius: 8, padding: 10, alignItems: 'center' },
+  refStatNum: { fontSize: 18, fontWeight: '800', color: Colors.textPrimary },
+  refStatLbl: { fontSize: 11, color: Colors.textSecondary },
+  shareBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 10, borderWidth: 1.5, borderColor: Colors.trustBlue },
+  shareBtnText: { fontSize: 14, fontWeight: '700', color: Colors.trustBlue },
   menuSection: { gap: 4, marginBottom: 24 },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.surface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.border },
   menuIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },

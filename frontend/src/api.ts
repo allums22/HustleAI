@@ -12,20 +12,12 @@ async function request(path: string, options: RequestInit = {}): Promise<any> {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string> || {}),
   };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  const res = await fetch(`${BACKEND_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(`${BACKEND_URL}${path}`, { ...options, headers });
   if (!res.ok) {
     const text = await res.text();
     let detail = text;
-    try {
-      const json = JSON.parse(text);
-      detail = json.detail || text;
-    } catch {}
+    try { detail = JSON.parse(text).detail || text; } catch {}
     throw new Error(detail);
   }
   return res.json();
@@ -33,51 +25,41 @@ async function request(path: string, options: RequestInit = {}): Promise<any> {
 
 export const api = {
   // Auth
-  register: (email: string, password: string, name: string) =>
-    request('/api/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({ email, password, name }),
-    }),
+  register: (email: string, password: string, name: string, referralCode?: string) =>
+    request('/api/auth/register', { method: 'POST', body: JSON.stringify({ email, password, name, referral_code: referralCode || null }) }),
   login: (email: string, password: string) =>
-    request('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    }),
-  exchangeSession: (sessionId: string) =>
-    request(`/api/auth/session?session_id=${sessionId}`),
+    request('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  exchangeSession: (sessionId: string) => request(`/api/auth/session?session_id=${sessionId}`),
   getMe: () => request('/api/auth/me'),
   logout: () => request('/api/auth/logout', { method: 'POST' }),
 
   // Questionnaire
   getQuestions: () => request('/api/questionnaire/questions'),
-  submitQuestionnaire: (data: any) =>
-    request('/api/questionnaire/submit', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  submitQuestionnaire: (data: any) => request('/api/questionnaire/submit', { method: 'POST', body: JSON.stringify(data) }),
 
   // Hustles
-  generateHustles: () =>
-    request('/api/hustles/generate', { method: 'POST' }),
+  generateHustles: () => request('/api/hustles/generate', { method: 'POST' }),
   getHustles: () => request('/api/hustles'),
   getHustleDetail: (id: string) => request(`/api/hustles/${id}`),
-  selectHustle: (id: string) =>
-    request(`/api/hustles/${id}/select`, { method: 'POST' }),
+  selectHustle: (id: string) => request(`/api/hustles/${id}/select`, { method: 'POST' }),
 
   // Plans
   checkPlanAccess: (hustleId: string) => request(`/api/plans/access/${hustleId}`),
-  generatePlan: (hustleId: string) =>
-    request(`/api/plans/generate/${hustleId}`, { method: 'POST' }),
+  generatePlan: (hustleId: string) => request(`/api/plans/generate/${hustleId}`, { method: 'POST' }),
   getPlan: (hustleId: string) => request(`/api/plans/${hustleId}`),
+
+  // Launch Kits
+  checkKitAccess: (hustleId: string) => request(`/api/launch-kit/access/${hustleId}`),
+  generateKit: (hustleId: string) => request(`/api/launch-kit/generate/${hustleId}`, { method: 'POST' }),
+  getKit: (hustleId: string) => request(`/api/launch-kit/${hustleId}`),
+
+  // Referral
+  getReferralInfo: () => request('/api/referral/info'),
 
   // Payments
   createCheckout: (plan: string, originUrl: string, hustleId?: string) =>
-    request('/api/payments/create-checkout', {
-      method: 'POST',
-      body: JSON.stringify({ plan, origin_url: originUrl, hustle_id: hustleId || null }),
-    }),
-  getPaymentStatus: (sessionId: string) =>
-    request(`/api/payments/status/${sessionId}`),
+    request('/api/payments/create-checkout', { method: 'POST', body: JSON.stringify({ plan, origin_url: originUrl, hustle_id: hustleId || null }) }),
+  getPaymentStatus: (sessionId: string) => request(`/api/payments/status/${sessionId}`),
 
   // Profile
   getProfile: () => request('/api/profile'),
