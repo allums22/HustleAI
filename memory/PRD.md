@@ -84,7 +84,10 @@ HustleAI is an AI-powered side hustle recommendation platform that helps users d
 - Payments: `/api/payments/create-checkout`, `/api/payments/status/{session_id}`, `/api/webhook/stripe`
 - Profile: `/api/profile`, `/api/subscription/tiers`
 
-## Design System
-- 60-30-10 color rule: Elevated Neutrals (stone-50/white), Trust Blue + Growth Green, Orange CTA
-- Mobile-first with 44px touch targets
-- Card-based layout with consistent border-radius (12px)
+## Design
+- **Premium Dark Theme**: Deep Navy (#0F172A) with Amber/Gold (#F59E0B) accents
+- Glassmorphism-inspired surfaces (#1E293B) with subtle borders
+- 60-30-10 rule: Navy base, slate surfaces, gold CTAs
+- Social proof on landing page (10,000+ hustles, $2.5M+ revenue, 4.9★ rating)
+- Testimonial section with user quotes
+- "Launch Kit Available" preview on every hustle card showing deliverables
