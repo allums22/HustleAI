@@ -121,12 +121,16 @@ export default function LandingPage() {
 
         <View style={styles.trustSection}>
           <View style={styles.trustRow}>
-            <Ionicons name="shield-checkmark" size={16} color={Colors.growthGreen} />
-            <Text style={styles.trustText}>Free plan includes 2 side hustles</Text>
+            <Ionicons name="gift" size={16} color={Colors.growthGreen} />
+            <Text style={styles.trustText}>First business plan is free</Text>
+          </View>
+          <View style={styles.trustRow}>
+            <Ionicons name="infinite" size={16} color={Colors.growthGreen} />
+            <Text style={styles.trustText}>Unlimited side hustle discovery</Text>
           </View>
           <View style={styles.trustRow}>
             <Ionicons name="lock-closed" size={16} color={Colors.growthGreen} />
-            <Text style={styles.trustText}>No credit card required</Text>
+            <Text style={styles.trustText}>No credit card required to start</Text>
           </View>
         </View>
       </ScrollView>

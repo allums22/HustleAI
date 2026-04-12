@@ -65,15 +65,16 @@ export const api = {
     request(`/api/hustles/${id}/select`, { method: 'POST' }),
 
   // Plans
+  checkPlanAccess: (hustleId: string) => request(`/api/plans/access/${hustleId}`),
   generatePlan: (hustleId: string) =>
     request(`/api/plans/generate/${hustleId}`, { method: 'POST' }),
   getPlan: (hustleId: string) => request(`/api/plans/${hustleId}`),
 
   // Payments
-  createCheckout: (plan: string, originUrl: string) =>
+  createCheckout: (plan: string, originUrl: string, hustleId?: string) =>
     request('/api/payments/create-checkout', {
       method: 'POST',
-      body: JSON.stringify({ plan, origin_url: originUrl }),
+      body: JSON.stringify({ plan, origin_url: originUrl, hustle_id: hustleId || null }),
     }),
   getPaymentStatus: (sessionId: string) =>
     request(`/api/payments/status/${sessionId}`),

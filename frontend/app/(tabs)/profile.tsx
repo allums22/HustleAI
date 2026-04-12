@@ -83,16 +83,18 @@ export default function ProfileScreen() {
           <View style={styles.subStats}>
             <View style={styles.subStatItem}>
               <Text style={styles.subStatNum}>{profile?.stats?.total_hustles || 0}</Text>
-              <Text style={styles.subStatLabel}>Generated</Text>
+              <Text style={styles.subStatLabel}>Hustles</Text>
             </View>
             <View style={styles.subStatDivider} />
             <View style={styles.subStatItem}>
-              <Text style={styles.subStatNum}>{profile?.stats?.selected_hustles || 0}</Text>
-              <Text style={styles.subStatLabel}>Active</Text>
+              <Text style={styles.subStatNum}>{profile?.stats?.plans_generated || 0}</Text>
+              <Text style={styles.subStatLabel}>Plans</Text>
             </View>
             <View style={styles.subStatDivider} />
             <View style={styles.subStatItem}>
-              <Text style={styles.subStatNum}>{profile?.stats?.remaining || 0}</Text>
+              <Text style={styles.subStatNum}>
+                {tier === 'pro' ? '∞' : profile?.stats?.remaining_plans ?? 0}
+              </Text>
               <Text style={styles.subStatLabel}>Remaining</Text>
             </View>
           </View>

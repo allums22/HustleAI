@@ -67,7 +67,8 @@ export default function DashboardScreen() {
   const selectedHustles = hustles.filter(h => h.selected);
   const tier = profile?.subscription?.tier || 'free';
   const tierName = profile?.subscription?.name || 'Free';
-  const remaining = profile?.stats?.remaining ?? 0;
+  const remainingPlans = profile?.stats?.remaining_plans ?? 0;
+  const trialUsed = profile?.stats?.trial_used ?? false;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -98,12 +99,14 @@ export default function DashboardScreen() {
             <Text style={styles.statLabel}>Total Hustles</Text>
           </View>
           <View style={[styles.statCard, { backgroundColor: Colors.growthGreenLight }]}>
-            <Text style={[styles.statNumber, { color: Colors.growthGreen }]}>{selectedHustles.length}</Text>
-            <Text style={styles.statLabel}>Active</Text>
+            <Text style={[styles.statNumber, { color: Colors.growthGreen }]}>{profile?.stats?.plans_generated || 0}</Text>
+            <Text style={styles.statLabel}>Plans</Text>
           </View>
           <View style={[styles.statCard, { backgroundColor: Colors.orangeLight }]}>
-            <Text style={[styles.statNumber, { color: Colors.orangeCTA }]}>{remaining}</Text>
-            <Text style={styles.statLabel}>Remaining</Text>
+            <Text style={[styles.statNumber, { color: Colors.orangeCTA }]}>
+              {tier === 'pro' ? '∞' : remainingPlans}
+            </Text>
+            <Text style={styles.statLabel}>{tier === 'free' && !trialUsed ? 'Free Trial' : 'Remaining'}</Text>
           </View>
         </View>
 
