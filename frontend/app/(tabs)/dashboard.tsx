@@ -130,6 +130,16 @@ export default function DashboardScreen() {
               <Text style={styles.actionText}>Generate More</Text>
             </TouchableOpacity>
             <TouchableOpacity
+              testID="new-niche-btn"
+              style={styles.actionCard}
+              onPress={() => router.push('/questionnaire')}
+            >
+              <View style={[styles.actionIcon, { backgroundColor: Colors.orangeLight }]}>
+                <Ionicons name="refresh" size={22} color={Colors.gold} />
+              </View>
+              <Text style={styles.actionText}>New Niche</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               testID="view-hustles-btn"
               style={styles.actionCard}
               onPress={() => router.push('/(tabs)/hustles')}
@@ -139,17 +149,24 @@ export default function DashboardScreen() {
               </View>
               <Text style={styles.actionText}>View Hustles</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              testID="view-calendar-btn"
-              style={styles.actionCard}
-              onPress={() => router.push('/(tabs)/calendar')}
-            >
-              <View style={[styles.actionIcon, { backgroundColor: Colors.orangeLight }]}>
-                <Ionicons name="calendar" size={22} color={Colors.orangeCTA} />
-              </View>
-              <Text style={styles.actionText}>Calendar</Text>
-            </TouchableOpacity>
           </View>
+
+          {/* Explore New Niche Banner */}
+          <TouchableOpacity
+            testID="explore-niche-banner"
+            style={styles.nicheBanner}
+            onPress={() => router.push('/questionnaire')}
+            activeOpacity={0.8}
+          >
+            <View style={styles.nicheIcon}>
+              <Ionicons name="compass" size={22} color={Colors.gold} />
+            </View>
+            <View style={styles.nicheContent}>
+              <Text style={styles.nicheTitle}>Explore a Different Niche</Text>
+              <Text style={styles.nicheDesc}>Retake the assessment to discover hustles in a new area</Text>
+            </View>
+            <Ionicons name="arrow-forward" size={20} color={Colors.gold} />
+          </TouchableOpacity>
         </View>
 
         {/* Recent Hustles */}
@@ -266,4 +283,9 @@ const styles = StyleSheet.create({
   upgradeTitle: { fontSize: 17, fontWeight: '700', color: Colors.textOnColor },
   upgradeDesc: { fontSize: 12, color: 'rgba(255,255,255,0.85)', marginTop: 2, lineHeight: 16 },
   btnDisabled: { opacity: 0.5 },
+  nicheBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.surface, borderRadius: 12, padding: 16, borderWidth: 1.5, borderColor: Colors.gold + '40', marginTop: 12 },
+  nicheIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.orangeLight, justifyContent: 'center', alignItems: 'center' },
+  nicheContent: { flex: 1 },
+  nicheTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
+  nicheDesc: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
 });
