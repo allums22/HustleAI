@@ -1,8 +1,9 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, BackgroundTasks
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import asyncio
 import logging
 import json
 import re
@@ -174,6 +175,88 @@ async def get_current_user(request: Request):
 
 def create_session_token():
     return f"sess_{uuid.uuid4().hex}"
+
+# ─── Async Generation Background Tasks ───
+async def _bg_generate_plan(hustle_id: str, user_id: str, hustle: dict, answers: dict, tier: str, trial_used: bool):
+    """Background task to generate a business plan."""
+    job_id = f"job_plan_{hustle_id}"
+    try:
+        await db.generation_jobs.update_one({"job_id": job_id}, {"$set": {"status": "generating"}})
+        prompt = f"""Create a detailed 30-day business plan for:
+Side Hustle: {hustle['name']}
+Description: {hustle['description']}
+Hours: {answers.get('hours_per_week', '10-20')}/week
+Budget: {answers.get('budget', '$100-$500')}
+Goal: {answers.get('income_goal', '$1000-$3000')}/month
+Tech: {answers.get('tech_comfort', 'Intermediate')}
+
+Return ONLY JSON with: "title", "overview", "daily_tasks" (array of 30 with day/title/tasks/estimated_hours), "milestones" (4 for days 7,14,21,30 with day/title/description/expected_outcome), "resources_needed" (array), "total_estimated_cost"."""
+        chat = LlmChat(api_key=emergent_key,
+            session_id=f"plan_{user_id}_{hustle_id}_{uuid.uuid4().hex[:6]}",
+            system_message="Expert business strategist. Respond with valid JSON only.")
+        chat.with_model("openai", "gpt-5.2")
+        response = await chat.send_message(UserMessage(text=prompt))
+        plan_data = parse_json_from_response(response)
+        plan_id = f"plan_{uuid.uuid4().hex[:12]}"
+        plan_doc = {
+            "plan_id": plan_id, "hustle_id": hustle_id, "user_id": user_id,
+            "title": plan_data.get("title", f"30-Day Plan: {hustle['name']}"),
+            "overview": plan_data.get("overview", ""), "daily_tasks": plan_data.get("daily_tasks", []),
+            "milestones": plan_data.get("milestones", []),
+            "resources_needed": plan_data.get("resources_needed", []),
+            "total_estimated_cost": plan_data.get("total_estimated_cost", "Varies"),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.business_plans.insert_one(plan_doc)
+        await db.side_hustles.update_one({"hustle_id": hustle_id}, {"$set": {"selected": True, "business_plan_generated": True}})
+        update_fields: Dict[str, Any] = {"$inc": {"plans_generated": 1}}
+        if tier == "free" and not trial_used:
+            update_fields["$set"] = {"trial_plan_used": True}
+        await db.users.update_one({"user_id": user_id}, update_fields)
+        await db.generation_jobs.update_one({"job_id": job_id}, {"$set": {"status": "complete"}})
+    except Exception as e:
+        logger.error(f"BG plan gen error: {e}")
+        await db.generation_jobs.update_one({"job_id": job_id}, {"$set": {"status": "failed", "error": str(e)}})
+
+async def _bg_generate_kit(hustle_id: str, user_id: str, hustle: dict):
+    """Background task to generate a launch kit."""
+    job_id = f"job_kit_{hustle_id}"
+    try:
+        await db.generation_jobs.update_one({"job_id": job_id}, {"$set": {"status": "generating"}})
+        prompt = f"""Create a complete Hustle Launch Kit for:
+Business: {hustle['name']}
+Description: {hustle['description']}
+Category: {hustle['category']}
+
+Return ONLY JSON with:
+- "tagline": string (catchy business tagline, max 10 words)
+- "elevator_pitch": string (30-second pitch script, ~100 words)
+- "social_posts": array of 5 strings (ready-to-post social media captions with emojis and hashtags)
+- "landing_page_html": string (complete single-page HTML website with inline CSS, modern design, blue/orange theme, mobile-responsive, includes hero section, about, services, CTA, contact form placeholder)
+- "brand_colors": object with "primary" and "accent" hex codes
+- "target_audience": string (1-2 sentences describing ideal customer)"""
+        chat = LlmChat(api_key=emergent_key,
+            session_id=f"kit_{user_id}_{hustle_id}_{uuid.uuid4().hex[:6]}",
+            system_message="Expert brand strategist and web designer. Return valid JSON only.")
+        chat.with_model("openai", "gpt-5.2")
+        response = await chat.send_message(UserMessage(text=prompt))
+        kit_data = parse_json_from_response(response)
+        kit_id = f"kit_{uuid.uuid4().hex[:12]}"
+        kit_doc = {
+            "kit_id": kit_id, "hustle_id": hustle_id, "user_id": user_id,
+            "tagline": kit_data.get("tagline", ""), "elevator_pitch": kit_data.get("elevator_pitch", ""),
+            "social_posts": kit_data.get("social_posts", []),
+            "landing_page_html": kit_data.get("landing_page_html", ""),
+            "brand_colors": kit_data.get("brand_colors", {}),
+            "target_audience": kit_data.get("target_audience", ""),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.launch_kits.insert_one(kit_doc)
+        await db.users.update_one({"user_id": user_id}, {"$inc": {"launch_kits_generated": 1}})
+        await db.generation_jobs.update_one({"job_id": job_id}, {"$set": {"status": "complete"}})
+    except Exception as e:
+        logger.error(f"BG kit gen error: {e}")
+        await db.generation_jobs.update_one({"job_id": job_id}, {"$set": {"status": "failed", "error": str(e)}})
 
 def make_user_doc(user_id, email, name, auth_type, picture="", password_hash=None):
     doc = {
@@ -481,7 +564,7 @@ async def generate_business_plan(hustle_id: str, user: dict = Depends(get_curren
         raise HTTPException(status_code=404, detail="Side hustle not found")
     existing = await db.business_plans.find_one({"hustle_id": hustle_id, "user_id": user["user_id"]}, {"_id": 0})
     if existing:
-        return {"plan": existing}
+        return {"plan": existing, "status": "complete"}
     tier = user.get("subscription_tier", "free")
     trial_used = user.get("trial_plan_used", False)
     plans_generated = user.get("plans_generated", 0)
@@ -493,47 +576,39 @@ async def generate_business_plan(hustle_id: str, user: dict = Depends(get_curren
     elif tier == "starter" and plans_generated >= SUBSCRIPTION_TIERS["starter"]["plan_limit"]:
         raise HTTPException(status_code=403, detail="Starter limit reached. Upgrade to Pro or Empire!")
 
+    # Check if already generating
+    job_id = f"job_plan_{hustle_id}"
+    existing_job = await db.generation_jobs.find_one({"job_id": job_id}, {"_id": 0})
+    if existing_job and existing_job.get("status") == "generating":
+        return {"status": "generating", "job_id": job_id}
+
+    # Start async generation
     qr = await db.questionnaire_responses.find_one({"user_id": user["user_id"]}, {"_id": 0})
     answers = qr.get("answers", {}) if qr else {}
-    prompt = f"""Create a detailed 30-day business plan for:
-Side Hustle: {hustle['name']}
-Description: {hustle['description']}
-Hours: {answers.get('hours_per_week', '10-20')}/week
-Budget: {answers.get('budget', '$100-$500')}
-Goal: {answers.get('income_goal', '$1000-$3000')}/month
-Tech: {answers.get('tech_comfort', 'Intermediate')}
+    await db.generation_jobs.update_one(
+        {"job_id": job_id},
+        {"$set": {"job_id": job_id, "type": "plan", "hustle_id": hustle_id, "user_id": user["user_id"], "status": "generating", "created_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True
+    )
+    asyncio.create_task(_bg_generate_plan(hustle_id, user["user_id"], hustle, answers, tier, trial_used))
+    return {"status": "generating", "job_id": job_id}
 
-Return ONLY JSON with: "title", "overview", "daily_tasks" (array of 30 with day/title/tasks/estimated_hours), "milestones" (4 for days 7,14,21,30 with day/title/description/expected_outcome), "resources_needed" (array), "total_estimated_cost"."""
-
-    try:
-        chat = LlmChat(api_key=emergent_key,
-            session_id=f"plan_{user['user_id']}_{hustle_id}_{uuid.uuid4().hex[:6]}",
-            system_message="Expert business strategist. Respond with valid JSON only.")
-        chat.with_model("openai", "gpt-5.2")
-        response = await chat.send_message(UserMessage(text=prompt))
-        plan_data = parse_json_from_response(response)
-    except Exception as e:
-        logger.error(f"Plan generation error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to generate business plan.")
-
-    plan_id = f"plan_{uuid.uuid4().hex[:12]}"
-    plan_doc = {
-        "plan_id": plan_id, "hustle_id": hustle_id, "user_id": user["user_id"],
-        "title": plan_data.get("title", f"30-Day Plan: {hustle['name']}"),
-        "overview": plan_data.get("overview", ""), "daily_tasks": plan_data.get("daily_tasks", []),
-        "milestones": plan_data.get("milestones", []),
-        "resources_needed": plan_data.get("resources_needed", []),
-        "total_estimated_cost": plan_data.get("total_estimated_cost", "Varies"),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    await db.business_plans.insert_one(plan_doc)
-    del plan_doc["_id"]
-    await db.side_hustles.update_one({"hustle_id": hustle_id}, {"$set": {"selected": True, "business_plan_generated": True}})
-    update_fields: Dict[str, Any] = {"$inc": {"plans_generated": 1}}
-    if tier == "free" and not trial_used:
-        update_fields["$set"] = {"trial_plan_used": True}
-    await db.users.update_one({"user_id": user["user_id"]}, update_fields)
-    return {"plan": plan_doc}
+@api_router.get("/generation/status/{job_id}")
+async def get_generation_status(job_id: str, user: dict = Depends(get_current_user)):
+    job = await db.generation_jobs.find_one({"job_id": job_id}, {"_id": 0})
+    if not job:
+        return {"status": "not_found"}
+    if job["status"] == "complete":
+        # Return the generated result
+        if job_id.startswith("job_plan_"):
+            hustle_id = job_id.replace("job_plan_", "")
+            plan = await db.business_plans.find_one({"hustle_id": hustle_id, "user_id": user["user_id"]}, {"_id": 0})
+            return {"status": "complete", "plan": plan}
+        elif job_id.startswith("job_kit_"):
+            hustle_id = job_id.replace("job_kit_", "")
+            kit = await db.launch_kits.find_one({"hustle_id": hustle_id, "user_id": user["user_id"]}, {"_id": 0})
+            return {"status": "complete", "kit": kit}
+    return {"status": job["status"], "error": job.get("error", "")}
 
 @api_router.get("/plans/{hustle_id}")
 async def get_business_plan(hustle_id: str, user: dict = Depends(get_current_user)):
@@ -568,7 +643,7 @@ async def generate_launch_kit(hustle_id: str, user: dict = Depends(get_current_u
         raise HTTPException(status_code=404, detail="Hustle not found")
     existing = await db.launch_kits.find_one({"hustle_id": hustle_id, "user_id": user["user_id"]}, {"_id": 0})
     if existing:
-        return {"kit": existing}
+        return {"kit": existing, "status": "complete"}
     # Access check
     tier = user.get("subscription_tier", "free")
     kits_gen = user.get("launch_kits_generated", 0)
@@ -584,44 +659,20 @@ async def generate_launch_kit(hustle_id: str, user: dict = Depends(get_current_u
         if not alacarte:
             raise HTTPException(status_code=403, detail="Launch kit limit reached. Buy à la carte ($2.99) or upgrade.")
 
-    prompt = f"""Create a complete Hustle Launch Kit for:
-Business: {hustle['name']}
-Description: {hustle['description']}
-Category: {hustle['category']}
+    # Check if already generating
+    job_id = f"job_kit_{hustle_id}"
+    existing_job = await db.generation_jobs.find_one({"job_id": job_id}, {"_id": 0})
+    if existing_job and existing_job.get("status") == "generating":
+        return {"status": "generating", "job_id": job_id}
 
-Return ONLY JSON with:
-- "tagline": string (catchy business tagline, max 10 words)
-- "elevator_pitch": string (30-second pitch script, ~100 words)
-- "social_posts": array of 5 strings (ready-to-post social media captions with emojis and hashtags)
-- "landing_page_html": string (complete single-page HTML website with inline CSS, modern design, blue/orange theme, mobile-responsive, includes hero section, about, services, CTA, contact form placeholder)
-- "brand_colors": object with "primary" and "accent" hex codes
-- "target_audience": string (1-2 sentences describing ideal customer)"""
-
-    try:
-        chat = LlmChat(api_key=emergent_key,
-            session_id=f"kit_{user['user_id']}_{hustle_id}_{uuid.uuid4().hex[:6]}",
-            system_message="Expert brand strategist and web designer. Return valid JSON only.")
-        chat.with_model("openai", "gpt-5.2")
-        response = await chat.send_message(UserMessage(text=prompt))
-        kit_data = parse_json_from_response(response)
-    except Exception as e:
-        logger.error(f"Launch kit error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to generate launch kit.")
-
-    kit_id = f"kit_{uuid.uuid4().hex[:12]}"
-    kit_doc = {
-        "kit_id": kit_id, "hustle_id": hustle_id, "user_id": user["user_id"],
-        "tagline": kit_data.get("tagline", ""), "elevator_pitch": kit_data.get("elevator_pitch", ""),
-        "social_posts": kit_data.get("social_posts", []),
-        "landing_page_html": kit_data.get("landing_page_html", ""),
-        "brand_colors": kit_data.get("brand_colors", {}),
-        "target_audience": kit_data.get("target_audience", ""),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    await db.launch_kits.insert_one(kit_doc)
-    del kit_doc["_id"]
-    await db.users.update_one({"user_id": user["user_id"]}, {"$inc": {"launch_kits_generated": 1}})
-    return {"kit": kit_doc}
+    # Start async generation
+    await db.generation_jobs.update_one(
+        {"job_id": job_id},
+        {"$set": {"job_id": job_id, "type": "kit", "hustle_id": hustle_id, "user_id": user["user_id"], "status": "generating", "created_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True
+    )
+    asyncio.create_task(_bg_generate_kit(hustle_id, user["user_id"], hustle))
+    return {"status": "generating", "job_id": job_id}
 
 @api_router.get("/launch-kit/{hustle_id}")
 async def get_launch_kit(hustle_id: str, user: dict = Depends(get_current_user)):

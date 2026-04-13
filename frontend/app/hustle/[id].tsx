@@ -44,25 +44,49 @@ export default function HustleDetailScreen() {
     finally { setLoading(false); }
   };
 
+  const pollForResult = async (jobId: string, type: 'plan' | 'kit') => {
+    const maxPolls = 40; // 40 * 3s = 2 minutes max
+    for (let i = 0; i < maxPolls; i++) {
+      await new Promise(r => setTimeout(r, 3000));
+      try {
+        const res = await api.getGenerationStatus(jobId);
+        if (res.status === 'complete') {
+          if (type === 'plan' && res.plan) { setPlan(res.plan); setGeneratingPlan(false); setAccess((p: any) => p ? { ...p, plan_exists: true } : p); }
+          if (type === 'kit' && res.kit) { setKit(res.kit); setGeneratingKit(false); setKitAccess((p: any) => p ? { ...p, kit_exists: true } : p); }
+          return;
+        }
+        if (res.status === 'failed') {
+          alert('Generation failed. Please try again.');
+          if (type === 'plan') setGeneratingPlan(false);
+          if (type === 'kit') setGeneratingKit(false);
+          return;
+        }
+      } catch { /* keep polling */ }
+    }
+    alert('Generation is taking longer than expected. Please refresh the page.');
+    if (type === 'plan') setGeneratingPlan(false);
+    if (type === 'kit') setGeneratingKit(false);
+  };
+
   const handleGeneratePlan = async () => {
     if (!access?.has_access && !access?.plan_exists) { setShowPaywall(true); return; }
     setGeneratingPlan(true);
     try {
       await api.selectHustle(id!);
       const res = await api.generatePlan(id!);
-      setPlan(res.plan);
-      setHustle((p: any) => p ? { ...p, selected: true, business_plan_generated: true } : p);
-      setAccess((p: any) => p ? { ...p, plan_exists: true } : p);
+      if (res.status === 'complete' && res.plan) { setPlan(res.plan); setGeneratingPlan(false); setAccess((p: any) => p ? { ...p, plan_exists: true } : p); return; }
+      if (res.status === 'generating' && res.job_id) { pollForResult(res.job_id, 'plan'); return; }
+      // Fallback - plan returned directly
+      if (res.plan) { setPlan(res.plan); setGeneratingPlan(false); }
     } catch (e: any) {
-      if (e.message?.includes('trial') || e.message?.includes('Upgrade') || e.message?.includes('limit')) {
-        setShowPaywall(true);
-      } else { alert(e.message || 'Failed'); }
-    } finally { setGeneratingPlan(false); }
+      setGeneratingPlan(false);
+      if (e.message?.includes('trial') || e.message?.includes('Upgrade') || e.message?.includes('limit')) { setShowPaywall(true); }
+      else { alert(e.message || 'Failed'); }
+    }
   };
 
   const handleGenerateKit = async () => {
     if (!kitAccess?.has_access && !kitAccess?.kit_exists) {
-      // Need to purchase
       try {
         let originUrl = Platform.OS === 'web' ? window.location.origin : '';
         const res = await api.createCheckout('alacarte_kit', originUrl, id);
@@ -73,9 +97,11 @@ export default function HustleDetailScreen() {
     setGeneratingKit(true);
     try {
       const res = await api.generateKit(id!);
-      setKit(res.kit);
-      setKitAccess((p: any) => p ? { ...p, kit_exists: true } : p);
+      if (res.status === 'complete' && res.kit) { setKit(res.kit); setGeneratingKit(false); setKitAccess((p: any) => p ? { ...p, kit_exists: true } : p); return; }
+      if (res.status === 'generating' && res.job_id) { pollForResult(res.job_id, 'kit'); return; }
+      if (res.kit) { setKit(res.kit); setGeneratingKit(false); }
     } catch (e: any) {
+      setGeneratingKit(false);
       if (e.message?.includes('Purchase') || e.message?.includes('upgrade')) {
         try {
           let originUrl = Platform.OS === 'web' ? window.location.origin : '';
@@ -83,7 +109,7 @@ export default function HustleDetailScreen() {
           if (res.url) { Platform.OS === 'web' ? (window.location.href = res.url) : Linking.openURL(res.url); }
         } catch {}
       } else { alert(e.message || 'Failed'); }
-    } finally { setGeneratingKit(false); }
+    }
   };
 
   const handlePurchase = async (type: 'alacarte' | 'starter' | 'pro' | 'empire') => {

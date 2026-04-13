@@ -47,6 +47,7 @@ export const api = {
   checkPlanAccess: (hustleId: string) => request(`/api/plans/access/${hustleId}`),
   generatePlan: (hustleId: string) => request(`/api/plans/generate/${hustleId}`, { method: 'POST' }),
   getPlan: (hustleId: string) => request(`/api/plans/${hustleId}`),
+  getGenerationStatus: (jobId: string) => request(`/api/generation/status/${jobId}`),
 
   // Launch Kits
   checkKitAccess: (hustleId: string) => request(`/api/launch-kit/access/${hustleId}`),
