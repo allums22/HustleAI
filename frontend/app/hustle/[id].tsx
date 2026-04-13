@@ -251,12 +251,7 @@ export default function HustleDetailScreen() {
                   <TouchableOpacity
                     testID="view-landing-page-btn"
                     style={s.viewLandingBtn}
-                    onPress={() => {
-                      if (Platform.OS === 'web') {
-                        const w = window.open('', '_blank');
-                        if (w) { w.document.write(kit.landing_page_html); w.document.close(); }
-                      }
-                    }}
+                    onPress={() => router.push(`/launch-page/${id}`)}
                     activeOpacity={0.8}
                   >
                     <Ionicons name="open-outline" size={18} color={Colors.background} />

@@ -14,6 +14,7 @@ export default function RootLayout() {
         <Stack.Screen name="questionnaire" options={{ gestureEnabled: false }} />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="hustle/[id]" />
+        <Stack.Screen name="launch-page/[id]" />
         <Stack.Screen name="pricing" />
         <Stack.Screen name="payment-success" />
       </Stack>
