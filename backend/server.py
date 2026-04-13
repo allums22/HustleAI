@@ -231,42 +231,44 @@ Return ONLY JSON: "title", "overview" (2 paragraphs), "daily_tasks" (30 items wi
         await db.generation_jobs.update_one({"job_id": job_id}, {"$set": {"status": "failed", "error": str(e)}})
 
 async def _bg_generate_kit(hustle_id: str, user_id: str, hustle: dict):
-    """Background task to generate a launch kit."""
+    """Background task to generate a launch kit in 2 stages for speed."""
     job_id = f"job_kit_{hustle_id}"
     try:
         await db.generation_jobs.update_one({"job_id": job_id}, {"$set": {"status": "generating"}})
-        prompt = f"""Create a Hustle Launch Kit for:
+
+        # ── Stage 1: Fast deliverables (~15s) ──
+        prompt1 = f"""Create a Hustle Launch Kit for:
 Business: {hustle['name']}
 Description: {hustle['description']}
 Category: {hustle.get('category', 'General')}
 
-Return ONLY a JSON object with these fields:
+Return ONLY JSON:
 - "tagline": catchy tagline under 10 words
 - "elevator_pitch": 30-second pitch (~80 words)
-- "social_posts": array of 5 social media captions with emojis and hashtags
+- "social_posts": array of 5 social media captions with emojis/hashtags
 - "brand_colors": {{"primary": "#hex", "accent": "#hex"}}
 - "target_audience": 1-2 sentences on ideal customer
-- "marketing_strategy": 3 key strategies in an array of strings
+- "marketing_strategy": array of 3 key strategies
 - "launch_checklist": array of 8 actionable launch steps"""
 
-        max_retries = 3
         kit_data = None
-        for attempt in range(max_retries):
+        for attempt in range(3):
             try:
                 chat = LlmChat(api_key=emergent_key,
-                    session_id=f"kit_{user_id}_{hustle_id}_{uuid.uuid4().hex[:4]}",
+                    session_id=f"kit1_{user_id}_{hustle_id}_{uuid.uuid4().hex[:4]}",
                     system_message="Expert brand strategist. Return valid JSON only. Be concise.")
                 chat.with_model("openai", "gpt-5.2")
-                response = await chat.send_message(UserMessage(text=prompt))
+                response = await chat.send_message(UserMessage(text=prompt1))
                 kit_data = parse_json_from_response(response)
                 break
             except Exception as e:
-                logger.warning(f"Kit gen attempt {attempt+1} failed: {e}")
-                if attempt < max_retries - 1:
+                logger.warning(f"Kit stage1 attempt {attempt+1} failed: {e}")
+                if attempt < 2:
                     await asyncio.sleep(2)
         if not kit_data:
-            raise ValueError("All retries failed")
+            raise ValueError("Stage 1 failed after retries")
 
+        # Save partial kit immediately so user sees progress
         kit_id = f"kit_{uuid.uuid4().hex[:12]}"
         kit_doc = {
             "kit_id": kit_id, "hustle_id": hustle_id, "user_id": user_id,
@@ -277,11 +279,78 @@ Return ONLY a JSON object with these fields:
             "target_audience": kit_data.get("target_audience", ""),
             "marketing_strategy": kit_data.get("marketing_strategy", []),
             "launch_checklist": kit_data.get("launch_checklist", []),
+            "landing_page_html": "",
+            "landing_page_status": "generating",
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.launch_kits.insert_one(kit_doc)
         await db.users.update_one({"user_id": user_id}, {"$inc": {"launch_kits_generated": 1}})
+        # Mark job complete so user sees stage 1 results immediately
         await db.generation_jobs.update_one({"job_id": job_id}, {"$set": {"status": "complete"}})
+
+        # ── Stage 2: Landing page (built from template + AI content — instant) ──
+        primary = kit_data.get("brand_colors", {}).get("primary", "#2563EB")
+        accent = kit_data.get("brand_colors", {}).get("accent", "#F59E0B")
+        tagline = kit_data.get("tagline", hustle['name'])
+        pitch = kit_data.get("elevator_pitch", hustle['description'])
+        target = kit_data.get("target_audience", "")
+        strategies = kit_data.get("marketing_strategy", [])
+        checklist = kit_data.get("launch_checklist", [])
+
+        benefits_html = ""
+        for i, s in enumerate(strategies[:3]):
+            icons = ["⚡", "🎯", "📈"]
+            benefits_html += f'<div class="benefit"><div class="benefit-icon">{icons[i % 3]}</div><p>{s}</p></div>'
+
+        steps_html = ""
+        for i, step in enumerate(checklist[:6]):
+            steps_html += f'<div class="step"><span class="step-num">{i+1}</span><p>{step}</p></div>'
+
+        html = f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>{hustle['name']}</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a2e;line-height:1.6}}
+.hero{{background:linear-gradient(135deg,{primary} 0%,{primary}dd 100%);color:#fff;padding:80px 24px;text-align:center}}
+.hero h1{{font-size:clamp(28px,5vw,48px);font-weight:900;margin-bottom:16px;letter-spacing:-1px}}
+.hero p{{font-size:18px;opacity:0.9;max-width:600px;margin:0 auto 32px}}
+.cta-btn{{display:inline-block;background:{accent};color:#000;font-weight:700;padding:16px 40px;border-radius:12px;text-decoration:none;font-size:18px;transition:transform 0.2s}}
+.cta-btn:hover{{transform:scale(1.05)}}
+.section{{padding:60px 24px;max-width:800px;margin:0 auto}}
+.section h2{{font-size:28px;font-weight:800;margin-bottom:24px;text-align:center}}
+.about{{background:#f8f9fa}}
+.about p{{font-size:16px;color:#555;text-align:center;max-width:600px;margin:0 auto}}
+.benefits{{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px;margin-top:16px}}
+.benefit{{background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:24px;text-align:center}}
+.benefit-icon{{font-size:32px;margin-bottom:8px}}
+.benefit p{{color:#555;font-size:14px}}
+.steps{{display:grid;gap:12px;margin-top:16px}}
+.step{{display:flex;align-items:center;gap:16px;background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px}}
+.step-num{{background:{accent};color:#000;font-weight:800;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}}
+.step p{{color:#333;font-size:14px}}
+.audience{{background:{primary}10;border-left:4px solid {primary};padding:20px;border-radius:0 10px 10px 0;margin-top:24px}}
+.audience p{{color:#555}}
+.cta-section{{background:{primary};color:#fff;padding:60px 24px;text-align:center}}
+.cta-section h2{{color:#fff;margin-bottom:16px}}
+.cta-section p{{opacity:0.9;margin-bottom:24px}}
+footer{{background:#1a1a2e;color:#aaa;padding:24px;text-align:center;font-size:13px}}
+</style></head><body>
+<section class="hero"><h1>{tagline}</h1><p>{hustle['description']}</p><a href="#contact" class="cta-btn">Get Started Today</a></section>
+<section class="section about"><h2>About</h2><p>{pitch}</p>
+{f'<div class="audience"><strong>Built for:</strong><p>{target}</p></div>' if target else ''}
+</section>
+<section class="section"><h2>Why Choose Us</h2><div class="benefits">{benefits_html}</div></section>
+<section class="section" style="background:#f8f9fa"><h2>Your Roadmap</h2><div class="steps">{steps_html}</div></section>
+<section class="cta-section" id="contact"><h2>Ready to Start?</h2><p>Take the first step toward building your {hustle.get('category','')} business today.</p><a href="#" class="cta-btn">Launch Now</a></section>
+<footer>&copy; 2026 {hustle['name']}. All rights reserved.</footer>
+</body></html>"""
+
+        await db.launch_kits.update_one(
+            {"kit_id": kit_id},
+            {"$set": {"landing_page_html": html, "landing_page_status": "complete"}}
+        )
+
     except Exception as e:
         logger.error(f"BG kit gen error: {e}")
         await db.generation_jobs.update_one({"job_id": job_id}, {"$set": {"status": "failed", "error": str(e)}})

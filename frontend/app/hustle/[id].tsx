@@ -25,6 +25,21 @@ export default function HustleDetailScreen() {
 
   useEffect(() => { if (id) loadDetail(); }, [id]);
 
+  // Auto-poll for landing page when kit exists but page is still generating
+  useEffect(() => {
+    if (!kit || kit.landing_page_status !== 'generating') return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await api.getKit(id!);
+        if (res.kit?.landing_page_html || res.kit?.landing_page_status !== 'generating') {
+          setKit(res.kit);
+          clearInterval(interval);
+        }
+      } catch {}
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [kit?.landing_page_status, id]);
+
   const loadDetail = async () => {
     try {
       const [detailRes, accessRes, kitAccessRes] = await Promise.all([
@@ -172,12 +187,12 @@ export default function HustleDetailScreen() {
           {/* What's included */}
           <View style={s.kitIncludes}>
             {[
+              { icon: 'globe-outline', label: 'Custom Landing Page', desc: 'Responsive website you can deploy' },
               { icon: 'megaphone-outline', label: '5 Social Media Posts', desc: 'Ready-to-post captions' },
               { icon: 'mic-outline', label: 'Elevator Pitch', desc: '30-second pitch script' },
               { icon: 'color-palette-outline', label: 'Brand Identity', desc: 'Colors & tagline' },
               { icon: 'trending-up', label: 'Marketing Strategy', desc: '3 key growth strategies' },
               { icon: 'checkbox-outline', label: 'Launch Checklist', desc: '8-step action plan' },
-              { icon: 'people-outline', label: 'Target Audience', desc: 'Ideal customer profile' },
             ].map((item, i) => (
               <View key={i} style={s.kitIncItem}>
                 <View style={s.kitIncIcon}><Ionicons name={item.icon as any} size={16} color={Colors.gold} /></View>
@@ -225,6 +240,40 @@ export default function HustleDetailScreen() {
                   ))}
                 </View>
               ) : null}
+
+              {/* Landing Page Section */}
+              <View style={s.landingSection}>
+                <View style={s.landingSectionHeader}>
+                  <Ionicons name="globe-outline" size={18} color={Colors.gold} />
+                  <Text style={s.landingSectionTitle}>Landing Page</Text>
+                </View>
+                {kit.landing_page_html && kit.landing_page_status !== 'generating' ? (
+                  <TouchableOpacity
+                    testID="view-landing-page-btn"
+                    style={s.viewLandingBtn}
+                    onPress={() => {
+                      if (Platform.OS === 'web') {
+                        const w = window.open('', '_blank');
+                        if (w) { w.document.write(kit.landing_page_html); w.document.close(); }
+                      }
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="open-outline" size={18} color={Colors.background} />
+                    <Text style={s.viewLandingBtnText}>Preview Your Landing Page</Text>
+                  </TouchableOpacity>
+                ) : kit.landing_page_status === 'failed' ? (
+                  <View style={s.landingFailed}>
+                    <Ionicons name="alert-circle" size={16} color={Colors.urgentRed} />
+                    <Text style={s.landingFailedText}>Landing page generation failed. Tap Launch Kit to retry.</Text>
+                  </View>
+                ) : (
+                  <View style={s.landingLoading}>
+                    <ActivityIndicator size="small" color={Colors.gold} />
+                    <Text style={s.landingLoadingText}>Building your custom landing page...</Text>
+                  </View>
+                )}
+              </View>
             </View>
           ) : generatingKit ? (
             <View style={s.kitLoading}><ActivityIndicator size="large" color={Colors.gold} /><Text style={s.kitLoadingText}>Building your launch kit...</Text></View>
@@ -353,6 +402,15 @@ const s = StyleSheet.create({
   kitAudience: { backgroundColor: Colors.surfaceElevated, borderRadius: 10, padding: 14 },
   kitAudienceLabel: { fontSize: 11, fontWeight: '700', color: Colors.textTertiary, textTransform: 'uppercase', marginBottom: 4 },
   kitAudienceText: { fontSize: 13, color: Colors.textSecondary, lineHeight: 18 },
+  landingSection: { backgroundColor: Colors.surfaceElevated, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: Colors.gold + '30' },
+  landingSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  landingSectionTitle: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
+  viewLandingBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.gold, paddingVertical: 14, borderRadius: 10 },
+  viewLandingBtnText: { fontSize: 15, fontWeight: '700', color: Colors.background },
+  landingLoading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 10 },
+  landingLoadingText: { fontSize: 13, color: Colors.textSecondary },
+  landingFailed: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  landingFailedText: { fontSize: 12, color: Colors.urgentRed },
   // ── Business Plan ──
   trialBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.growthGreenLight, padding: 12, borderRadius: 10, marginBottom: 10 },
   trialText: { fontSize: 14, fontWeight: '700', color: Colors.growthGreenText },
