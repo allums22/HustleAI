@@ -104,7 +104,7 @@ export default function DashboardScreen() {
           </View>
           <View style={[styles.statCard, { backgroundColor: Colors.orangeLight }]}>
             <Text style={[styles.statNumber, { color: Colors.orangeCTA }]}>
-              {tier === 'pro' ? '∞' : remainingPlans}
+              {tier === 'pro' || tier === 'empire' ? '∞' : remainingPlans}
             </Text>
             <Text style={styles.statLabel}>{tier === 'free' && !trialUsed ? 'Free Trial' : 'Remaining'}</Text>
           </View>
@@ -245,18 +245,18 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8, maxWidth: 1000, alignSelf: 'center', width: '100%' },
   greeting: { fontSize: 24, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.5 },
   subGreeting: { fontSize: 14, color: Colors.textSecondary, marginTop: 2 },
   tierBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.trustBlueLight, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   proBadge: { backgroundColor: Colors.trustBlue },
   tierText: { fontSize: 12, fontWeight: '700', color: Colors.trustBlue },
   tierTextPro: { color: Colors.textOnColor },
-  statsRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 24, marginTop: 16 },
+  statsRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 24, marginTop: 16, maxWidth: 1000, alignSelf: 'center', width: '100%' },
   statCard: { flex: 1, borderRadius: 12, padding: 14, alignItems: 'center' },
   statNumber: { fontSize: 28, fontWeight: '800' },
   statLabel: { fontSize: 11, fontWeight: '600', color: Colors.textSecondary, marginTop: 2 },
-  section: { paddingHorizontal: 24, marginTop: 24 },
+  section: { paddingHorizontal: 24, marginTop: 24, maxWidth: 1000, alignSelf: 'center', width: '100%' },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary, marginBottom: 12 },
   seeAll: { fontSize: 13, fontWeight: '600', color: Colors.trustBlue },

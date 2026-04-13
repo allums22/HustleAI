@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
   progressBar: { flex: 1, height: 6, backgroundColor: Colors.border, borderRadius: 3 },
   progressFill: { height: '100%', backgroundColor: Colors.growthGreen, borderRadius: 3 },
   progressText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-  scroll: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 16 },
+  scroll: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 16, maxWidth: 600, alignSelf: 'center', width: '100%' },
   errorBox: { backgroundColor: Colors.urgentRedLight, padding: 12, borderRadius: 10, marginBottom: 16 },
   errorText: { fontSize: 13, color: Colors.urgentRed },
   questionContainer: { gap: 12 },

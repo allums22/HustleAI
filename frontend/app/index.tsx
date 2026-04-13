@@ -120,7 +120,7 @@ export default function LandingPage() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background },
-  scroll: { paddingHorizontal: 24, paddingBottom: 40 },
+  scroll: { paddingHorizontal: 24, paddingBottom: 40, maxWidth: 700, alignSelf: 'center', width: '100%' },
   header: { paddingVertical: 16 },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   logoIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.gold, justifyContent: 'center', alignItems: 'center' },

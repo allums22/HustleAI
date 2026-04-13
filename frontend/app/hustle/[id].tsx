@@ -355,7 +355,7 @@ const s = StyleSheet.create({
   headerBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8 },
   backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { flex: 1, fontSize: 17, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center' },
-  scroll: { paddingHorizontal: 24, paddingBottom: 40 },
+  scroll: { paddingHorizontal: 24, paddingBottom: 40, maxWidth: 800, alignSelf: 'center', width: '100%' },
   infoCard: { backgroundColor: Colors.surface, borderRadius: 14, padding: 20, borderWidth: 1, borderColor: Colors.border, marginBottom: 16 },
   badgeRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   catBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },

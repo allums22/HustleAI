@@ -131,7 +131,7 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
-  scroll: { paddingHorizontal: 24, paddingBottom: 40 },
+  scroll: { paddingHorizontal: 24, paddingBottom: 40, maxWidth: 480, alignSelf: 'center', width: '100%' },
   backBtn: { marginTop: 8, marginBottom: 16, width: 44, height: 44, justifyContent: 'center' },
   headerSection: { marginBottom: 32 },
   title: { fontSize: 28, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.5 },

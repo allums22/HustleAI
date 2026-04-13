@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
   headerBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8 },
   backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { flex: 1, fontSize: 17, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center' },
-  scroll: { paddingHorizontal: 24, paddingBottom: 40 },
+  scroll: { paddingHorizontal: 24, paddingBottom: 40, maxWidth: 800, alignSelf: 'center', width: '100%' },
   subtitle: { fontSize: 15, color: Colors.textSecondary, textAlign: 'center', marginBottom: 20, lineHeight: 22 },
   planCard: { backgroundColor: Colors.surface, borderRadius: 14, padding: 20, marginBottom: 12, borderWidth: 1, borderColor: Colors.border },
   planCardPopular: { borderColor: Colors.trustBlue, borderWidth: 2 },
