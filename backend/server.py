@@ -182,21 +182,33 @@ async def _bg_generate_plan(hustle_id: str, user_id: str, hustle: dict, answers:
     job_id = f"job_plan_{hustle_id}"
     try:
         await db.generation_jobs.update_one({"job_id": job_id}, {"$set": {"status": "generating"}})
-        prompt = f"""Create a detailed 30-day business plan for:
+        prompt = f"""Create a 30-day business plan for:
 Side Hustle: {hustle['name']}
 Description: {hustle['description']}
 Hours: {answers.get('hours_per_week', '10-20')}/week
 Budget: {answers.get('budget', '$100-$500')}
 Goal: {answers.get('income_goal', '$1000-$3000')}/month
-Tech: {answers.get('tech_comfort', 'Intermediate')}
 
-Return ONLY JSON with: "title", "overview", "daily_tasks" (array of 30 with day/title/tasks/estimated_hours), "milestones" (4 for days 7,14,21,30 with day/title/description/expected_outcome), "resources_needed" (array), "total_estimated_cost"."""
-        chat = LlmChat(api_key=emergent_key,
-            session_id=f"plan_{user_id}_{hustle_id}_{uuid.uuid4().hex[:6]}",
-            system_message="Expert business strategist. Respond with valid JSON only.")
-        chat.with_model("openai", "gpt-5.2")
-        response = await chat.send_message(UserMessage(text=prompt))
-        plan_data = parse_json_from_response(response)
+Return ONLY JSON: "title", "overview" (2 paragraphs), "daily_tasks" (30 items with day/title/tasks/estimated_hours), "milestones" (4 for days 7,14,21,30 with day/title/description/expected_outcome), "resources_needed" (array), "total_estimated_cost"."""
+
+        max_retries = 3
+        plan_data = None
+        for attempt in range(max_retries):
+            try:
+                chat = LlmChat(api_key=emergent_key,
+                    session_id=f"plan_{user_id}_{hustle_id}_{uuid.uuid4().hex[:4]}",
+                    system_message="Expert business strategist. Return valid JSON only. Be concise.")
+                chat.with_model("openai", "gpt-5.2")
+                response = await chat.send_message(UserMessage(text=prompt))
+                plan_data = parse_json_from_response(response)
+                break
+            except Exception as e:
+                logger.warning(f"Plan gen attempt {attempt+1} failed: {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2)
+        if not plan_data:
+            raise ValueError("All retries failed")
+
         plan_id = f"plan_{uuid.uuid4().hex[:12]}"
         plan_doc = {
             "plan_id": plan_id, "hustle_id": hustle_id, "user_id": user_id,
@@ -223,32 +235,48 @@ async def _bg_generate_kit(hustle_id: str, user_id: str, hustle: dict):
     job_id = f"job_kit_{hustle_id}"
     try:
         await db.generation_jobs.update_one({"job_id": job_id}, {"$set": {"status": "generating"}})
-        prompt = f"""Create a complete Hustle Launch Kit for:
+        prompt = f"""Create a Hustle Launch Kit for:
 Business: {hustle['name']}
 Description: {hustle['description']}
-Category: {hustle['category']}
+Category: {hustle.get('category', 'General')}
 
-Return ONLY JSON with:
-- "tagline": string (catchy business tagline, max 10 words)
-- "elevator_pitch": string (30-second pitch script, ~100 words)
-- "social_posts": array of 5 strings (ready-to-post social media captions with emojis and hashtags)
-- "landing_page_html": string (complete single-page HTML website with inline CSS, modern design, blue/orange theme, mobile-responsive, includes hero section, about, services, CTA, contact form placeholder)
-- "brand_colors": object with "primary" and "accent" hex codes
-- "target_audience": string (1-2 sentences describing ideal customer)"""
-        chat = LlmChat(api_key=emergent_key,
-            session_id=f"kit_{user_id}_{hustle_id}_{uuid.uuid4().hex[:6]}",
-            system_message="Expert brand strategist and web designer. Return valid JSON only.")
-        chat.with_model("openai", "gpt-5.2")
-        response = await chat.send_message(UserMessage(text=prompt))
-        kit_data = parse_json_from_response(response)
+Return ONLY a JSON object with these fields:
+- "tagline": catchy tagline under 10 words
+- "elevator_pitch": 30-second pitch (~80 words)
+- "social_posts": array of 5 social media captions with emojis and hashtags
+- "brand_colors": {{"primary": "#hex", "accent": "#hex"}}
+- "target_audience": 1-2 sentences on ideal customer
+- "marketing_strategy": 3 key strategies in an array of strings
+- "launch_checklist": array of 8 actionable launch steps"""
+
+        max_retries = 3
+        kit_data = None
+        for attempt in range(max_retries):
+            try:
+                chat = LlmChat(api_key=emergent_key,
+                    session_id=f"kit_{user_id}_{hustle_id}_{uuid.uuid4().hex[:4]}",
+                    system_message="Expert brand strategist. Return valid JSON only. Be concise.")
+                chat.with_model("openai", "gpt-5.2")
+                response = await chat.send_message(UserMessage(text=prompt))
+                kit_data = parse_json_from_response(response)
+                break
+            except Exception as e:
+                logger.warning(f"Kit gen attempt {attempt+1} failed: {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2)
+        if not kit_data:
+            raise ValueError("All retries failed")
+
         kit_id = f"kit_{uuid.uuid4().hex[:12]}"
         kit_doc = {
             "kit_id": kit_id, "hustle_id": hustle_id, "user_id": user_id,
-            "tagline": kit_data.get("tagline", ""), "elevator_pitch": kit_data.get("elevator_pitch", ""),
+            "tagline": kit_data.get("tagline", ""),
+            "elevator_pitch": kit_data.get("elevator_pitch", ""),
             "social_posts": kit_data.get("social_posts", []),
-            "landing_page_html": kit_data.get("landing_page_html", ""),
             "brand_colors": kit_data.get("brand_colors", {}),
             "target_audience": kit_data.get("target_audience", ""),
+            "marketing_strategy": kit_data.get("marketing_strategy", []),
+            "launch_checklist": kit_data.get("launch_checklist", []),
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.launch_kits.insert_one(kit_doc)
@@ -581,6 +609,9 @@ async def generate_business_plan(hustle_id: str, user: dict = Depends(get_curren
     existing_job = await db.generation_jobs.find_one({"job_id": job_id}, {"_id": 0})
     if existing_job and existing_job.get("status") == "generating":
         return {"status": "generating", "job_id": job_id}
+    # If previously failed, allow retry
+    if existing_job and existing_job.get("status") == "failed":
+        await db.generation_jobs.delete_one({"job_id": job_id})
 
     # Start async generation
     qr = await db.questionnaire_responses.find_one({"user_id": user["user_id"]}, {"_id": 0})
@@ -664,6 +695,9 @@ async def generate_launch_kit(hustle_id: str, user: dict = Depends(get_current_u
     existing_job = await db.generation_jobs.find_one({"job_id": job_id}, {"_id": 0})
     if existing_job and existing_job.get("status") == "generating":
         return {"status": "generating", "job_id": job_id}
+    # If previously failed, allow retry
+    if existing_job and existing_job.get("status") == "failed":
+        await db.generation_jobs.delete_one({"job_id": job_id})
 
     # Start async generation
     await db.generation_jobs.update_one(

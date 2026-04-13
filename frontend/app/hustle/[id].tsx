@@ -56,10 +56,9 @@ export default function HustleDetailScreen() {
           return;
         }
         if (res.status === 'failed') {
-          alert('Generation failed. Please try again.');
-          if (type === 'plan') setGeneratingPlan(false);
-          if (type === 'kit') setGeneratingKit(false);
-          return;
+          if (type === 'plan') { setGeneratingPlan(false); }
+          if (type === 'kit') { setGeneratingKit(false); }
+          return 'failed';
         }
       } catch { /* keep polling */ }
     }
@@ -173,10 +172,12 @@ export default function HustleDetailScreen() {
           {/* What's included */}
           <View style={s.kitIncludes}>
             {[
-              { icon: 'globe-outline', label: 'Custom Landing Page', desc: 'Mobile-responsive website' },
               { icon: 'megaphone-outline', label: '5 Social Media Posts', desc: 'Ready-to-post captions' },
               { icon: 'mic-outline', label: 'Elevator Pitch', desc: '30-second pitch script' },
               { icon: 'color-palette-outline', label: 'Brand Identity', desc: 'Colors & tagline' },
+              { icon: 'trending-up', label: 'Marketing Strategy', desc: '3 key growth strategies' },
+              { icon: 'checkbox-outline', label: 'Launch Checklist', desc: '8-step action plan' },
+              { icon: 'people-outline', label: 'Target Audience', desc: 'Ideal customer profile' },
             ].map((item, i) => (
               <View key={i} style={s.kitIncItem}>
                 <View style={s.kitIncIcon}><Ionicons name={item.icon as any} size={16} color={Colors.gold} /></View>
@@ -205,6 +206,25 @@ export default function HustleDetailScreen() {
                 </View>
               ) : null}
               {kit.target_audience ? <View style={s.kitAudience}><Text style={s.kitAudienceLabel}>Target Audience</Text><Text style={s.kitAudienceText}>{kit.target_audience}</Text></View> : null}
+              {kit.marketing_strategy?.length > 0 ? (
+                <View style={s.kitPosts}>
+                  <Text style={s.kitPostsLabel}>Marketing Strategy</Text>
+                  {kit.marketing_strategy.map((strat: string, i: number) => (
+                    <View key={i} style={s.kitPostCard}><Text style={s.kitPostText}>{strat}</Text></View>
+                  ))}
+                </View>
+              ) : null}
+              {kit.launch_checklist?.length > 0 ? (
+                <View style={s.kitPosts}>
+                  <Text style={s.kitPostsLabel}>Launch Checklist</Text>
+                  {kit.launch_checklist.map((step: string, i: number) => (
+                    <View key={i} style={{ flexDirection: 'row', gap: 8, marginBottom: 4 }}>
+                      <Text style={{ fontSize: 13, color: Colors.gold, fontWeight: '700' }}>{i + 1}.</Text>
+                      <Text style={s.kitPostText}>{step}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
             </View>
           ) : generatingKit ? (
             <View style={s.kitLoading}><ActivityIndicator size="large" color={Colors.gold} /><Text style={s.kitLoadingText}>Building your launch kit...</Text></View>
