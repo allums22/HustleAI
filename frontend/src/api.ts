@@ -57,6 +57,33 @@ export const api = {
   // Referral
   getReferralInfo: () => request('/api/referral/info'),
 
+  // Tasks & Progress
+  completeTask: (hustleId: string, day: number, taskIndex: number, completed: boolean) =>
+    request(`/api/tasks/${hustleId}/complete`, { method: 'POST', body: JSON.stringify({ day, task_index: taskIndex, completed }) }),
+  getTaskProgress: (hustleId: string) => request(`/api/tasks/${hustleId}/progress`),
+  getStreak: () => request('/api/tasks/streak'),
+
+  // Earnings
+  logEarning: (data: { amount: number; hustle_id?: string; note?: string; date?: string }) =>
+    request('/api/earnings/log', { method: 'POST', body: JSON.stringify(data) }),
+  getEarnings: () => request('/api/earnings'),
+  getEarningsSummary: () => request('/api/earnings/summary'),
+
+  // Achievements
+  getAchievements: () => request('/api/achievements'),
+
+  // Community
+  createPost: (data: { content: string; milestone?: string; amount?: number }) =>
+    request('/api/community/posts', { method: 'POST', body: JSON.stringify(data) }),
+  getCommunityPosts: () => request('/api/community/posts'),
+  reactToPost: (postId: string) => request(`/api/community/posts/${postId}/react`, { method: 'POST' }),
+
+  // Motivation
+  getDailyMotivation: () => request('/api/motivation/daily'),
+
+  // Public Stats
+  getPublicStats: () => fetch(`${BACKEND_URL}/api/stats/public`).then(r => r.json()),
+
   // Payments
   createCheckout: (plan: string, originUrl: string, hustleId?: string) =>
     request('/api/payments/create-checkout', { method: 'POST', body: JSON.stringify({ plan, origin_url: originUrl, hustle_id: hustleId || null }) }),

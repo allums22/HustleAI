@@ -11,7 +11,8 @@ const BREAKPOINT = 768;
 const tabs = [
   { name: 'dashboard', title: 'Dashboard', icon: 'grid-outline', iconActive: 'grid' },
   { name: 'hustles', title: 'My Hustles', icon: 'rocket-outline', iconActive: 'rocket' },
-  { name: 'calendar', title: 'Calendar', icon: 'calendar-outline', iconActive: 'calendar' },
+  { name: 'progress', title: 'Progress', icon: 'trending-up-outline', iconActive: 'trending-up' },
+  { name: 'community', title: 'Community', icon: 'people-outline', iconActive: 'people' },
   { name: 'profile', title: 'Profile', icon: 'person-outline', iconActive: 'person' },
 ];
 

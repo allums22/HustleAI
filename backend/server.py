@@ -927,6 +927,252 @@ async def get_profile(user: dict = Depends(get_current_user)):
 async def get_tiers():
     return {"tiers": SUBSCRIPTION_TIERS, "alacarte_plan_price": ALACARTE_PLAN_PRICE, "alacarte_kit_price": ALACARTE_KIT_PRICE}
 
+# ─── ACHIEVEMENT DEFINITIONS ───
+ACHIEVEMENTS = [
+    {"id": "first_hustle", "name": "Side Hustle Explorer", "desc": "Generated your first side hustle recommendations", "icon": "rocket", "condition": "hustles >= 1"},
+    {"id": "five_hustles", "name": "Opportunity Hunter", "desc": "Discovered 5+ side hustles", "icon": "search", "condition": "hustles >= 5"},
+    {"id": "first_plan", "name": "Strategist", "desc": "Generated your first business plan", "icon": "document-text", "condition": "plans >= 1"},
+    {"id": "first_kit", "name": "Launch Ready", "desc": "Created your first Launch Kit", "icon": "briefcase", "condition": "kits >= 1"},
+    {"id": "first_earning", "name": "First Dollar", "desc": "Logged your first earning", "icon": "cash", "condition": "earnings >= 1"},
+    {"id": "hundred_earned", "name": "Benjamin Club", "desc": "Earned $100+ from side hustles", "icon": "trophy", "condition": "total_earned >= 100"},
+    {"id": "thousand_earned", "name": "4-Figure Hustler", "desc": "Earned $1,000+ from side hustles", "icon": "diamond", "condition": "total_earned >= 1000"},
+    {"id": "streak_3", "name": "On Fire", "desc": "Completed tasks 3 days in a row", "icon": "flame", "condition": "streak >= 3"},
+    {"id": "streak_7", "name": "Unstoppable", "desc": "7-day task completion streak", "icon": "flash", "condition": "streak >= 7"},
+    {"id": "streak_30", "name": "Legend", "desc": "30-day streak — you're a machine", "icon": "star", "condition": "streak >= 30"},
+    {"id": "first_post", "name": "Community Voice", "desc": "Shared your first win with the community", "icon": "megaphone", "condition": "posts >= 1"},
+    {"id": "referrer", "name": "Growth Agent", "desc": "Referred your first friend", "icon": "people", "condition": "referrals >= 1"},
+]
+
+MOTIVATION_MESSAGES = [
+    "You're leaving ${amount} on the table if you skip today. Let's get to work! 💰",
+    "Your competitors are grinding right now. Stay ahead — complete today's tasks! 🔥",
+    "Just {minutes} minutes of focused work today could earn you ${amount} this week.",
+    "Day {day} of your plan — you're {percent}% there. Don't break the streak! 🚀",
+    "The difference between dreamers and earners? Showing up daily. Let's go! 💪",
+    "Your side hustle won't build itself. ${amount}/week is waiting for you today.",
+    "Skipping today = falling behind. You've got {tasks} tasks — knock them out! ⚡",
+]
+
+# ─── TASK COMPLETION ENDPOINTS ───
+@api_router.post("/tasks/{hustle_id}/complete")
+async def complete_task(hustle_id: str, request: Request, user: dict = Depends(get_current_user)):
+    body = await request.json()
+    day = body.get("day")
+    task_index = body.get("task_index")
+    completed = body.get("completed", True)
+    if day is None or task_index is None:
+        raise HTTPException(status_code=400, detail="day and task_index required")
+    key = f"{hustle_id}_{day}_{task_index}"
+    if completed:
+        await db.task_completions.update_one(
+            {"user_id": user["user_id"], "key": key},
+            {"$set": {"user_id": user["user_id"], "key": key, "hustle_id": hustle_id,
+                      "day": day, "task_index": task_index, "completed_at": datetime.now(timezone.utc).isoformat()}},
+            upsert=True)
+    else:
+        await db.task_completions.delete_one({"user_id": user["user_id"], "key": key})
+    return {"status": "ok"}
+
+@api_router.get("/tasks/{hustle_id}/progress")
+async def get_task_progress(hustle_id: str, user: dict = Depends(get_current_user)):
+    completions = await db.task_completions.find(
+        {"user_id": user["user_id"], "hustle_id": hustle_id}, {"_id": 0}).to_list(500)
+    completed_keys = {c["key"] for c in completions}
+    plan = await db.business_plans.find_one({"hustle_id": hustle_id, "user_id": user["user_id"]}, {"_id": 0})
+    total_tasks = sum(len(d.get("tasks", [])) for d in (plan or {}).get("daily_tasks", []))
+    completed_count = len(completed_keys)
+    return {"completed_keys": list(completed_keys), "completed_count": completed_count,
+            "total_tasks": total_tasks, "percent": round(completed_count / max(total_tasks, 1) * 100)}
+
+@api_router.get("/tasks/streak")
+async def get_streak(user: dict = Depends(get_current_user)):
+    completions = await db.task_completions.find(
+        {"user_id": user["user_id"]}, {"_id": 0}).sort("completed_at", -1).to_list(1000)
+    if not completions:
+        return {"current_streak": 0, "longest_streak": 0, "total_completed": 0}
+    dates = set()
+    for c in completions:
+        try:
+            dt = datetime.fromisoformat(c["completed_at"]).date()
+            dates.add(dt)
+        except Exception:
+            pass
+    today = datetime.now(timezone.utc).date()
+    streak = 0
+    d = today
+    while d in dates:
+        streak += 1
+        d = d - timedelta(days=1)
+    if today not in dates and (today - timedelta(days=1)) in dates:
+        streak = 0
+        d = today - timedelta(days=1)
+        while d in dates:
+            streak += 1
+            d = d - timedelta(days=1)
+    sorted_dates = sorted(dates)
+    longest = 1 if sorted_dates else 0
+    current_run = 1
+    for i in range(1, len(sorted_dates)):
+        if (sorted_dates[i] - sorted_dates[i-1]).days == 1:
+            current_run += 1
+            longest = max(longest, current_run)
+        else:
+            current_run = 1
+    return {"current_streak": streak, "longest_streak": longest, "total_completed": len(completions)}
+
+# ─── EARNINGS TRACKER ENDPOINTS ───
+@api_router.post("/earnings/log")
+async def log_earning(request: Request, user: dict = Depends(get_current_user)):
+    body = await request.json()
+    amount = body.get("amount", 0)
+    hustle_id = body.get("hustle_id")
+    note = body.get("note", "")
+    date = body.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+    if not amount or amount <= 0:
+        raise HTTPException(status_code=400, detail="Valid amount required")
+    earning_id = f"earn_{uuid.uuid4().hex[:12]}"
+    await db.earnings.insert_one({
+        "earning_id": earning_id, "user_id": user["user_id"], "hustle_id": hustle_id,
+        "amount": float(amount), "note": note, "date": date,
+        "created_at": datetime.now(timezone.utc).isoformat()})
+    return {"earning_id": earning_id, "status": "ok"}
+
+@api_router.get("/earnings")
+async def get_earnings(user: dict = Depends(get_current_user)):
+    earnings = await db.earnings.find({"user_id": user["user_id"]}, {"_id": 0}).sort("date", -1).to_list(500)
+    return {"earnings": earnings}
+
+@api_router.get("/earnings/summary")
+async def get_earnings_summary(user: dict = Depends(get_current_user)):
+    earnings = await db.earnings.find({"user_id": user["user_id"]}, {"_id": 0}).to_list(1000)
+    total = sum(e.get("amount", 0) for e in earnings)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    this_week_start = (datetime.now(timezone.utc) - timedelta(days=datetime.now(timezone.utc).weekday())).strftime("%Y-%m-%d")
+    this_month = datetime.now(timezone.utc).strftime("%Y-%m")
+    week_total = sum(e["amount"] for e in earnings if e.get("date", "") >= this_week_start)
+    month_total = sum(e["amount"] for e in earnings if e.get("date", "").startswith(this_month))
+    today_total = sum(e["amount"] for e in earnings if e.get("date", "") == today)
+    return {"total": total, "today": today_total, "this_week": week_total, "this_month": month_total, "count": len(earnings)}
+
+# ─── ACHIEVEMENTS ENDPOINTS ───
+@api_router.get("/achievements")
+async def get_achievements(user: dict = Depends(get_current_user)):
+    unlocked = await db.user_achievements.find({"user_id": user["user_id"]}, {"_id": 0}).to_list(50)
+    unlocked_ids = {a["achievement_id"] for a in unlocked}
+    hustle_count = await db.side_hustles.count_documents({"user_id": user["user_id"]})
+    plan_count = await db.business_plans.count_documents({"user_id": user["user_id"]})
+    kit_count = await db.launch_kits.count_documents({"user_id": user["user_id"]})
+    earnings = await db.earnings.find({"user_id": user["user_id"]}, {"_id": 0}).to_list(1000)
+    total_earned = sum(e.get("amount", 0) for e in earnings)
+    streak_data = await get_streak.__wrapped__(user) if hasattr(get_streak, '__wrapped__') else {"current_streak": 0}
+    streak = streak_data.get("current_streak", 0) if isinstance(streak_data, dict) else 0
+    post_count = await db.community_posts.count_documents({"user_id": user["user_id"]})
+    ref_count = await db.referrals.count_documents({"referrer_id": user["user_id"]})
+    metrics = {"hustles": hustle_count, "plans": plan_count, "kits": kit_count,
+               "earnings": len(earnings), "total_earned": total_earned, "streak": streak,
+               "posts": post_count, "referrals": ref_count}
+    newly_unlocked = []
+    for ach in ACHIEVEMENTS:
+        if ach["id"] in unlocked_ids:
+            continue
+        cond = ach["condition"]
+        parts = cond.split(" ")
+        if len(parts) == 3:
+            metric_val = metrics.get(parts[0], 0)
+            threshold = float(parts[2])
+            if parts[1] == ">=" and metric_val >= threshold:
+                await db.user_achievements.insert_one({
+                    "user_id": user["user_id"], "achievement_id": ach["id"],
+                    "unlocked_at": datetime.now(timezone.utc).isoformat()})
+                unlocked_ids.add(ach["id"])
+                newly_unlocked.append(ach["id"])
+    result = []
+    for ach in ACHIEVEMENTS:
+        result.append({**ach, "unlocked": ach["id"] in unlocked_ids})
+    return {"achievements": result, "newly_unlocked": newly_unlocked}
+
+# ─── COMMUNITY WINS BOARD ───
+@api_router.post("/community/posts")
+async def create_community_post(request: Request, user: dict = Depends(get_current_user)):
+    body = await request.json()
+    content = body.get("content", "").strip()
+    milestone = body.get("milestone", "")
+    amount = body.get("amount")
+    if not content:
+        raise HTTPException(status_code=400, detail="Content required")
+    post_id = f"post_{uuid.uuid4().hex[:12]}"
+    await db.community_posts.insert_one({
+        "post_id": post_id, "user_id": user["user_id"],
+        "author_name": user.get("name", "Anonymous"),
+        "author_tier": user.get("subscription_tier", "free"),
+        "content": content, "milestone": milestone,
+        "amount": float(amount) if amount else None,
+        "reactions": 0, "reacted_by": [],
+        "created_at": datetime.now(timezone.utc).isoformat()})
+    return {"post_id": post_id}
+
+@api_router.get("/community/posts")
+async def get_community_posts(user: dict = Depends(get_current_user)):
+    posts = await db.community_posts.find({}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return {"posts": posts}
+
+@api_router.post("/community/posts/{post_id}/react")
+async def react_to_post(post_id: str, user: dict = Depends(get_current_user)):
+    post = await db.community_posts.find_one({"post_id": post_id}, {"_id": 0})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    reacted = post.get("reacted_by", [])
+    if user["user_id"] in reacted:
+        await db.community_posts.update_one({"post_id": post_id},
+            {"$inc": {"reactions": -1}, "$pull": {"reacted_by": user["user_id"]}})
+    else:
+        await db.community_posts.update_one({"post_id": post_id},
+            {"$inc": {"reactions": 1}, "$push": {"reacted_by": user["user_id"]}})
+    return {"status": "ok"}
+
+# ─── DAILY MOTIVATION ───
+@api_router.get("/motivation/daily")
+async def get_daily_motivation(user: dict = Depends(get_current_user)):
+    hustles = await db.side_hustles.find(
+        {"user_id": user["user_id"], "selected": True}, {"_id": 0}).to_list(10)
+    income_str = hustles[0].get("potential_income", "$500/week") if hustles else "$500/week"
+    nums = re.findall(r'[\d,]+', income_str.replace(',', ''))
+    weekly_est = int(nums[0]) if nums else 500
+    daily_est = round(weekly_est / 7)
+    streak_data = await db.task_completions.find(
+        {"user_id": user["user_id"]}, {"_id": 0}).sort("completed_at", -1).to_list(1)
+    plan = await db.business_plans.find_one(
+        {"user_id": user["user_id"]}, {"_id": 0, "daily_tasks": 1})
+    today_tasks = 0
+    current_day = 1
+    if plan and plan.get("daily_tasks"):
+        completions = await db.task_completions.count_documents({"user_id": user["user_id"]})
+        total_plan_tasks = sum(len(d.get("tasks", [])) for d in plan["daily_tasks"])
+        if total_plan_tasks > 0:
+            progress_ratio = completions / total_plan_tasks
+            current_day = min(30, max(1, int(progress_ratio * 30) + 1))
+        for d in plan["daily_tasks"]:
+            if d.get("day") == current_day:
+                today_tasks = len(d.get("tasks", []))
+                break
+    percent = min(100, round((current_day / 30) * 100))
+    idx = hash(datetime.now(timezone.utc).strftime("%Y-%m-%d") + user["user_id"]) % len(MOTIVATION_MESSAGES)
+    msg = MOTIVATION_MESSAGES[idx]
+    msg = msg.replace("{amount}", str(daily_est)).replace("{day}", str(current_day))
+    msg = msg.replace("{percent}", str(percent)).replace("{tasks}", str(today_tasks))
+    msg = msg.replace("{minutes}", str(today_tasks * 15))
+    return {"message": msg, "daily_estimate": daily_est, "weekly_estimate": weekly_est,
+            "current_day": current_day, "today_tasks": today_tasks, "percent": percent}
+
+# ─── REAL STATS FOR LANDING PAGE ───
+@api_router.get("/stats/public")
+async def get_public_stats():
+    user_count = await db.users.count_documents({})
+    hustle_count = await db.side_hustles.count_documents({})
+    plan_count = await db.business_plans.count_documents({})
+    kit_count = await db.launch_kits.count_documents({})
+    return {"users": user_count, "hustles": hustle_count, "plans": plan_count, "kits": kit_count}
+
 app.include_router(api_router)
 app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 

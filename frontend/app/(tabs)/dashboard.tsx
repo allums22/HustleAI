@@ -18,6 +18,8 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [motivation, setMotivation] = useState<any>(null);
+  const [streak, setStreak] = useState<any>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -27,6 +29,12 @@ export default function DashboardScreen() {
       ]);
       setProfile(profileRes);
       setHustles(hustlesRes.hustles || []);
+      // Load motivation & streak
+      try {
+        const [motRes, streakRes] = await Promise.all([api.getDailyMotivation(), api.getStreak()]);
+        setMotivation(motRes);
+        setStreak(streakRes);
+      } catch {}
     } catch (e) {
       console.error('Dashboard load error:', e);
     } finally {
@@ -91,6 +99,25 @@ export default function DashboardScreen() {
             <Text style={[styles.tierText, tier !== 'free' && styles.tierTextPro]}>{tierName}</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Daily Motivation Banner */}
+        {motivation && (
+          <View style={styles.motivationBanner}>
+            <View style={styles.motivationLeft}>
+              <Ionicons name="flame" size={24} color={Colors.gold} />
+              {streak && streak.current_streak > 0 && (
+                <View style={styles.streakPill}><Text style={styles.streakNum}>{streak.current_streak}</Text><Text style={styles.streakLabel}>day streak</Text></View>
+              )}
+            </View>
+            <View style={styles.motivationContent}>
+              <Text style={styles.motivationText}>{motivation.message}</Text>
+              <TouchableOpacity testID="motivation-action" style={styles.motivationBtn} onPress={() => router.push('/(tabs)/progress')}>
+                <Text style={styles.motivationBtnText}>Start Today's Tasks</Text>
+                <Ionicons name="arrow-forward" size={14} color={Colors.background} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* Stats Cards */}
         <View style={styles.statsRow}>
@@ -278,12 +305,21 @@ const styles = StyleSheet.create({
   hustleFooter: { flexDirection: 'row', gap: 16, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.borderLight },
   hustleStat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   hustleStatText: { fontSize: 12, color: Colors.textSecondary, fontWeight: '500' },
-  upgradeBanner: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 24, marginTop: 24, backgroundColor: Colors.orangeCTA, borderRadius: 14, padding: 18, gap: 12 },
+  upgradeBanner: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 24, marginTop: 24, backgroundColor: Colors.orangeCTA, borderRadius: 14, padding: 18, gap: 12, maxWidth: 1000, alignSelf: 'center', width: '100%' },
   upgradeContent: { flex: 1 },
   upgradeTitle: { fontSize: 17, fontWeight: '700', color: Colors.textOnColor },
   upgradeDesc: { fontSize: 12, color: 'rgba(255,255,255,0.85)', marginTop: 2, lineHeight: 16 },
   btnDisabled: { opacity: 0.5 },
   nicheBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.surface, borderRadius: 12, padding: 16, borderWidth: 1.5, borderColor: Colors.gold + '40', marginTop: 12 },
+  motivationBanner: { flexDirection: 'row', gap: 12, marginHorizontal: 24, marginTop: 12, backgroundColor: Colors.orangeLight, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.gold + '30', maxWidth: 1000, alignSelf: 'center', width: '100%' },
+  motivationLeft: { alignItems: 'center', gap: 4 },
+  streakPill: { alignItems: 'center' },
+  streakNum: { fontSize: 18, fontWeight: '800', color: Colors.gold },
+  streakLabel: { fontSize: 9, color: Colors.gold, fontWeight: '600' },
+  motivationContent: { flex: 1, gap: 8 },
+  motivationText: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary, lineHeight: 20 },
+  motivationBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.gold, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, alignSelf: 'flex-start' },
+  motivationBtnText: { fontSize: 13, fontWeight: '700', color: Colors.background },
   nicheIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.orangeLight, justifyContent: 'center', alignItems: 'center' },
   nicheContent: { flex: 1 },
   nicheTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
