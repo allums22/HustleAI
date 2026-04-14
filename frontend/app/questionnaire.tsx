@@ -9,6 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../src/context/AuthContext';
 import { api } from '../src/api';
 import { Colors } from '../src/colors';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 
 interface Question {
   id: string;
@@ -28,6 +30,7 @@ export default function QuestionnaireScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
+  const [resumeFile, setResumeFile] = useState<{ name: string; b64: string } | null>(null);
   const { user, refreshUser } = useAuth();
   const router = useRouter();
 
@@ -48,6 +51,36 @@ export default function QuestionnaireScreen() {
       setError('Failed to load questions');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePickResume = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'text/plain', 'application/msword',
+               'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+        copyToCacheDirectory: true,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        if (Platform.OS === 'web') {
+          // On web, read the file using fetch + blob
+          const resp = await fetch(asset.uri);
+          const blob = await resp.blob();
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64data = (reader.result as string).split(',')[1];
+            setResumeFile({ name: asset.name, b64: base64data });
+          };
+          reader.readAsDataURL(blob);
+        } else {
+          // On native, use FileSystem
+          const b64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 });
+          setResumeFile({ name: asset.name, b64 });
+        }
+      }
+    } catch (e) {
+      console.error('Resume pick error:', e);
     }
   };
 
@@ -92,6 +125,8 @@ export default function QuestionnaireScreen() {
         answers,
         additional_skills: additionalSkills || null,
         resume_text: resumeText || null,
+        resume_file_b64: resumeFile?.b64 || null,
+        resume_filename: resumeFile?.name || null,
       });
       setGenerating(true);
       await api.generateHustles();
@@ -232,15 +267,49 @@ export default function QuestionnaireScreen() {
 
               <View style={styles.inputSection}>
                 <Text style={styles.inputLabel}>Resume / Experience Summary</Text>
+                
+                {/* Upload Resume Button */}
+                <TouchableOpacity
+                  testID="upload-resume-btn"
+                  style={styles.uploadBtn}
+                  onPress={handlePickResume}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.uploadBtnIcon}>
+                    <Ionicons name={resumeFile ? 'document-text' : 'cloud-upload-outline'} size={22} color={resumeFile ? Colors.growthGreenText : Colors.gold} />
+                  </View>
+                  <View style={styles.uploadBtnContent}>
+                    <Text style={styles.uploadBtnTitle}>
+                      {resumeFile ? resumeFile.name : 'Upload Your Resume'}
+                    </Text>
+                    <Text style={styles.uploadBtnSubtitle}>
+                      {resumeFile ? 'Tap to replace file' : 'PDF, TXT, or DOC — we\'ll extract your skills'}
+                    </Text>
+                  </View>
+                  {resumeFile ? (
+                    <TouchableOpacity onPress={() => setResumeFile(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="close-circle" size={22} color={Colors.textTertiary} />
+                    </TouchableOpacity>
+                  ) : (
+                    <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
+                  )}
+                </TouchableOpacity>
+
+                <View style={styles.orDivider}>
+                  <View style={styles.orLine} />
+                  <Text style={styles.orText}>or type it</Text>
+                  <View style={styles.orLine} />
+                </View>
+
                 <TextInput
                   testID="resume-text-input"
-                  style={[styles.textArea, { minHeight: 120 }]}
+                  style={[styles.textArea, { minHeight: 100 }]}
                   placeholder="Paste your resume text or describe your work experience..."
                   placeholderTextColor={Colors.textTertiary}
                   value={resumeText}
                   onChangeText={setResumeText}
                   multiline
-                  numberOfLines={6}
+                  numberOfLines={5}
                   textAlignVertical="top"
                 />
               </View>
@@ -326,6 +395,15 @@ const styles = StyleSheet.create({
   inputSection: { gap: 6, marginTop: 8 },
   inputLabel: { fontSize: 13, fontWeight: '600', color: Colors.textPrimary, textTransform: 'uppercase', letterSpacing: 0.5 },
   textArea: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 12, padding: 14, fontSize: 15, color: Colors.textPrimary, minHeight: 80 },
+  // Upload Resume
+  uploadBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.surface, borderWidth: 1.5, borderColor: Colors.gold + '40', borderRadius: 12, padding: 16, borderStyle: 'dashed' as any },
+  uploadBtnIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.orangeLight, justifyContent: 'center', alignItems: 'center' },
+  uploadBtnContent: { flex: 1 },
+  uploadBtnTitle: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
+  uploadBtnSubtitle: { fontSize: 12, color: Colors.textTertiary, marginTop: 2 },
+  orDivider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 12 },
+  orLine: { flex: 1, height: 1, backgroundColor: Colors.border },
+  orText: { fontSize: 12, color: Colors.textTertiary, fontWeight: '600' },
   navBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 16, borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: Colors.surface },
   navBackBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 12, paddingHorizontal: 16 },
   navBackText: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },

@@ -304,10 +304,11 @@ Return ONLY JSON:
         strategies = kit_data.get("marketing_strategy", [])
         pricing_tiers = kit_data.get("pricing_tiers", [])
 
-        # Get user email for contact section
-        user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0, "email": 1, "name": 1})
+        # Get user email + phone for contact section
+        user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0, "email": 1, "name": 1, "phone": 1})
         user_email = user_doc.get("email", "") if user_doc else ""
         user_name = user_doc.get("name", "") if user_doc else ""
+        user_phone = user_doc.get("phone", "") if user_doc else ""
 
         benefits_html = ""
         for i, s in enumerate(strategies[:3]):
@@ -428,6 +429,7 @@ footer{{background:var(--dark);border-top:1px solid #334155;padding:24px 5%;disp
 <section class="contact" id="contact"><h2>Let's Work Together</h2>
 <p>Ready to get started? Reach out today.</p>
 <p class="contact-email">{user_email}</p>
+{f'<p style="margin-top:4px;font-size:18px;font-weight:600;color:var(--a)">{user_phone}</p>' if user_phone else ''}
 <p style="margin-top:8px;color:var(--muted)">{user_name}</p>
 </section>
 
@@ -447,6 +449,7 @@ def make_user_doc(user_id, email, name, auth_type, picture="", password_hash=Non
     doc = {
         "user_id": user_id, "email": email, "name": name, "picture": picture,
         "auth_type": auth_type, "subscription_tier": "free",
+        "phone": "",
         "hustle_count": 0, "plans_generated": 0, "launch_kits_generated": 0,
         "trial_plan_used": False, "alacarte_plans_purchased": 0,
         "referral_code": generate_referral_code(),
@@ -603,11 +606,17 @@ async def generate_hustles(user: dict = Depends(get_current_user)):
     additional_skills = qr.get("additional_skills", "")
     resume_text = qr.get("resume_text", "")
 
-    prompt = f"""Based on the following user profile, generate exactly 12 personalized side hustle recommendations.
+    prompt = f"""Based on the following user profile, generate exactly 12 UNIQUE and DIVERSE side hustle recommendations. Each hustle MUST be distinctly different from the others — no similar concepts or overlapping ideas.
 
-IMPORTANT: Generate TWO categories:
-- First 5 hustles must be "starter" tier: Low/no startup cost, earning $100-$500/week. Beginner-friendly, can start today.
-- Next 7 hustles must be "premium" tier: Higher earning $1000-$5000/week potential. May require investment or advanced skills.
+CRITICAL RULES:
+- Every hustle must be a DIFFERENT type of business/service
+- Do NOT repeat categories or similar business models
+- Mix digital, physical, service, product, and creative hustles
+- If the user has blue collar/trade skills, at LEAST 3 hustles must directly use those specific trade skills (e.g., if they know construction, suggest specific construction services; if electrical, suggest electrical services)
+
+Generate TWO categories:
+- First 5 hustles: "starter" tier — Low/no startup cost, $100-$500/week. Beginner-friendly.
+- Next 7 hustles: "premium" tier — $1000-$5000/week potential. May require investment.
 
 User Profile:
 - Profession: {answers.get('profession', 'Not specified')}
@@ -620,11 +629,11 @@ User Profile:
 - Work style: {answers.get('work_style', 'Not specified')}
 - Tech comfort: {answers.get('tech_comfort', 'Not specified')}
 - Timeline: {answers.get('timeline', 'Not specified')}
+- Blue collar/trade skills: {answers.get('blue_collar', 'None')}
 - Additional skills: {additional_skills or 'None'}
 - Resume: {resume_text[:500] if resume_text else 'None'}
-- Blue collar/trade skills: {answers.get('blue_collar', 'Not specified')}
 
-IMPORTANT: If the user has blue collar/trade skills (handyman, construction, painting, automotive, etc.), include service-based hustles that leverage those hands-on skills. These can be very profitable local businesses.
+IMPORTANT: If blue collar skills are listed (anything other than "None of these"), you MUST generate hustles that directly leverage those exact skills. For example: construction → "Residential Remodeling Service", electrician → "Smart Home Electrical Installation", painting → "Premium Interior Painting Company", etc.
 
 Return ONLY a JSON array of 12 objects. Each must have:
 - "name": string
@@ -1017,6 +1026,124 @@ async def get_profile(user: dict = Depends(get_current_user)):
 @api_router.get("/subscription/tiers")
 async def get_tiers():
     return {"tiers": SUBSCRIPTION_TIERS, "alacarte_plan_price": ALACARTE_PLAN_PRICE, "alacarte_kit_price": ALACARTE_KIT_PRICE}
+
+# ─── PROFILE UPDATE (phone) ───
+@api_router.put("/profile/phone")
+async def update_phone(request: Request, user: dict = Depends(get_current_user)):
+    body = await request.json()
+    phone = body.get("phone", "")
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"phone": phone}})
+    return {"status": "ok"}
+
+# ─── LANDING PAGE CUSTOMIZATION ───
+@api_router.put("/launch-kit/{hustle_id}/customize")
+async def customize_landing_page(hustle_id: str, request: Request, user: dict = Depends(get_current_user)):
+    """Let users update their landing page contact links and info."""
+    body = await request.json()
+    kit = await db.launch_kits.find_one({"hustle_id": hustle_id, "user_id": user["user_id"]}, {"_id": 0})
+    if not kit:
+        raise HTTPException(status_code=404, detail="Launch kit not found")
+    
+    html = kit.get("landing_page_html", "")
+    if not html:
+        raise HTTPException(status_code=400, detail="Landing page not generated yet")
+    
+    # Get the customization values
+    email = body.get("email", "")
+    phone = body.get("phone", "")
+    name = body.get("name", "")
+    website = body.get("website", "")
+    instagram = body.get("instagram", "")
+    facebook = body.get("facebook", "")
+    
+    # Rebuild the contact section of the HTML
+    contact_links_html = ""
+    if website:
+        contact_links_html += f'<p style="margin-top:8px"><a href="{website}" style="color:var(--a);font-weight:700;font-size:16px" target="_blank">{website}</a></p>'
+    social_html = ""
+    if instagram:
+        social_html += f'<a href="https://instagram.com/{instagram.replace("@","")}" style="color:var(--a);font-weight:600;font-size:14px;margin-right:16px" target="_blank">Instagram: @{instagram.replace("@","")}</a>'
+    if facebook:
+        social_html += f'<a href="{facebook}" style="color:var(--a);font-weight:600;font-size:14px" target="_blank">Facebook</a>'
+    if social_html:
+        contact_links_html += f'<p style="margin-top:12px">{social_html}</p>'
+    
+    # Replace the contact section — find existing contact block
+    import re as regex
+    # Update email
+    if email:
+        html = regex.sub(r'<p class="contact-email">[^<]*</p>', f'<p class="contact-email">{email}</p>', html)
+    # Update phone — either replace existing or add after email
+    if phone:
+        if regex.search(r'<p style="margin-top:4px;font-size:18px[^"]*">[^<]*</p>', html):
+            html = regex.sub(r'<p style="margin-top:4px;font-size:18px[^"]*">[^<]*</p>', f'<p style="margin-top:4px;font-size:18px;font-weight:600;color:var(--a)">{phone}</p>', html)
+        else:
+            html = html.replace('</p>\n<p style="margin-top:8px;color:var(--muted)">', f'</p>\n<p style="margin-top:4px;font-size:18px;font-weight:600;color:var(--a)">{phone}</p>\n<p style="margin-top:8px;color:var(--muted)">')
+    # Update name
+    if name:
+        html = regex.sub(r'<p style="margin-top:8px;color:var\(--muted\)">[^<]*</p>', f'<p style="margin-top:8px;color:var(--muted)">{name}</p>', html)
+    # Add social/website links before closing contact section  
+    if contact_links_html:
+        html = html.replace('</section>\n\n<footer>', f'{contact_links_html}</section>\n\n<footer>')
+    
+    # Update user profile too
+    updates: Dict[str, Any] = {}
+    if phone:
+        updates["phone"] = phone
+    if name:
+        updates["name"] = name
+    if updates:
+        await db.users.update_one({"user_id": user["user_id"]}, {"$set": updates})
+    
+    # Save customization data to kit for future edits
+    await db.launch_kits.update_one(
+        {"hustle_id": hustle_id, "user_id": user["user_id"]},
+        {"$set": {
+            "landing_page_html": html,
+            "custom_links": {
+                "email": email, "phone": phone, "name": name,
+                "website": website, "instagram": instagram, "facebook": facebook
+            }
+        }}
+    )
+    return {"status": "ok", "html": html}
+
+# ─── AI MENTOR ───
+@api_router.post("/mentor/{hustle_id}/chat")
+async def mentor_chat(hustle_id: str, request: Request, user: dict = Depends(get_current_user)):
+    tier = user.get("subscription_tier", "free")
+    if tier == "free":
+        raise HTTPException(status_code=403, detail="AI Mentor is available on Starter, Pro, and Empire plans. Upgrade to get personalized coaching!")
+    body = await request.json()
+    message = body.get("message", "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Message required")
+    hustle = await db.side_hustles.find_one({"hustle_id": hustle_id, "user_id": user["user_id"]}, {"_id": 0})
+    if not hustle:
+        raise HTTPException(status_code=404, detail="Hustle not found")
+    plan = await db.business_plans.find_one({"hustle_id": hustle_id, "user_id": user["user_id"]}, {"_id": 0})
+    qr = await db.questionnaire_responses.find_one({"user_id": user["user_id"]}, {"_id": 0})
+
+    system = f"""You are an expert AI business mentor for {hustle['name']} — a {hustle.get('category', '')} side hustle.
+Business description: {hustle.get('description', '')}
+Potential income: {hustle.get('potential_income', '')}
+User's name: {user.get('name', '')}
+{'Business plan overview: ' + plan.get('overview', '')[:300] if plan else ''}
+{'User skills: ' + str(qr.get('answers', {}).get('skills', '')) if qr else ''}
+{'Blue collar skills: ' + str(qr.get('answers', {}).get('blue_collar', '')) if qr else ''}
+
+You are a hands-on, experienced mentor. Give specific, actionable advice. Be encouraging but realistic. If asked about pricing, give specific numbers. If asked about finding clients, give specific strategies. Keep responses concise (2-3 paragraphs max). End with a specific action item the user should do TODAY."""
+
+    try:
+        chat = LlmChat(api_key=emergent_key,
+            session_id=f"mentor_{user['user_id']}_{hustle_id}",
+            system_message=system)
+        chat.with_model("openai", "gpt-5.2")
+        response = await chat.send_message(UserMessage(text=message))
+        return {"response": response}
+    except Exception as e:
+        logger.error(f"Mentor error: {e}")
+        raise HTTPException(status_code=500, detail="Mentor is temporarily unavailable. Try again.")
 
 # ─── ACHIEVEMENT DEFINITIONS ───
 ACHIEVEMENTS = [

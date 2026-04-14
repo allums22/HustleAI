@@ -81,6 +81,18 @@ export const api = {
   // Motivation
   getDailyMotivation: () => request('/api/motivation/daily'),
 
+  // AI Mentor
+  mentorChat: (hustleId: string, message: string) =>
+    request(`/api/mentor/${hustleId}/chat`, { method: 'POST', body: JSON.stringify({ message }) }),
+
+  // Landing Page Customization
+  customizeLandingPage: (hustleId: string, data: { email?: string; phone?: string; name?: string; website?: string; instagram?: string; facebook?: string }) =>
+    request(`/api/launch-kit/${hustleId}/customize`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  // Profile
+  updatePhone: (phone: string) =>
+    request('/api/profile/phone', { method: 'PUT', body: JSON.stringify({ phone }) }),
+
   // Public Stats
   getPublicStats: () => fetch(`${BACKEND_URL}/api/stats/public`).then(r => r.json()),
 
