@@ -69,19 +69,36 @@ export default function LaunchPagePreview() {
           <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Your Landing Page</Text>
-        <TouchableOpacity
-          testID="lp-fullscreen-btn"
-          style={styles.fullscreenBtn}
-          onPress={() => {
-            if (Platform.OS === 'web') {
-              const blob = new Blob([html], { type: 'text/html' });
-              const url = URL.createObjectURL(blob);
-              window.open(url, '_blank');
-            }
-          }}
-        >
-          <Ionicons name="expand-outline" size={20} color={Colors.gold} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            testID="lp-download-btn"
+            style={styles.actionBtn}
+            onPress={() => {
+              if (Platform.OS === 'web') {
+                const blob = new Blob([html], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'landing-page.html'; a.click();
+                URL.revokeObjectURL(url);
+              }
+            }}
+          >
+            <Ionicons name="download-outline" size={20} color={Colors.gold} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            testID="lp-fullscreen-btn"
+            style={styles.actionBtn}
+            onPress={() => {
+              if (Platform.OS === 'web') {
+                const blob = new Blob([html], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                window.open(url, '_blank');
+              }
+            }}
+          >
+            <Ionicons name="expand-outline" size={20} color={Colors.gold} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {Platform.OS === 'web' ? (
@@ -109,6 +126,8 @@ const styles = StyleSheet.create({
   backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { flex: 1, fontSize: 17, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center' },
   fullscreenBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+  headerActions: { flexDirection: 'row', gap: 4 },
+  actionBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', borderRadius: 8, backgroundColor: Colors.surfaceElevated },
   iframeContainer: { flex: 1, margin: 8, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border },
   errorText: { fontSize: 16, color: Colors.textSecondary, textAlign: 'center' },
   retryBtn: { backgroundColor: Colors.gold, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 },

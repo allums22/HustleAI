@@ -309,7 +309,7 @@ export default function HustleDetailScreen() {
               <View key={i} style={s.dayCard}><View style={s.dayHeader}><Text style={s.dayNum}>Day {day.day}</Text><Text style={s.dayTitle}>{day.title}</Text></View>
                 {(day.tasks || []).map((t: string, ti: number) => <Text key={ti} style={s.dayTask}>• {t}</Text>)}</View>
             ))}
-            {(plan.daily_tasks || []).length > 5 && <TouchableOpacity testID="view-calendar-btn" style={s.calBtn} onPress={() => router.push('/(tabs)/calendar')}>
+            {(plan.daily_tasks || []).length > 5 && <TouchableOpacity testID="view-calendar-btn" style={s.calBtn} onPress={() => router.push('/(tabs)/progress')}>
               <Ionicons name="calendar-outline" size={18} color={Colors.gold} /><Text style={s.calBtnText}>View Full 30-Day Calendar</Text>
             </TouchableOpacity>}
           </View>

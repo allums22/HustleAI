@@ -92,6 +92,8 @@ QUESTIONNAIRE_QUESTIONS = [
      "options": ["Beginner - I stick to basics", "Intermediate - I can learn new tools", "Advanced - I'm very tech-savvy", "Expert - I can build tech solutions"]},
     {"id": "timeline", "question": "When do you want to start seeing results?", "type": "single_select",
      "options": ["This week", "Within a month", "1-3 months", "3-6 months", "I'm patient - long term focus"]},
+    {"id": "blue_collar", "question": "Do you have hands-on trade or blue collar skills?", "type": "multi_select",
+     "options": ["Handyman/Home Repair", "Construction", "Painting/Drywall", "Plumbing", "Electrical", "Automotive/Mechanic", "Landscaping/Lawn Care", "Welding/Fabrication", "Carpentry/Woodwork", "HVAC", "Cleaning/Janitorial", "Moving/Hauling", "None of these", "Other"]},
 ]
 
 # ─── Pydantic Models ───
@@ -243,13 +245,15 @@ Description: {hustle['description']}
 Category: {hustle.get('category', 'General')}
 
 Return ONLY JSON:
+- "business_name": a creative, professional business name for this hustle (not the hustle name itself, a real brand name)
 - "tagline": catchy tagline under 10 words
 - "elevator_pitch": 30-second pitch (~80 words)
 - "social_posts": array of 5 social media captions with emojis/hashtags
 - "brand_colors": {{"primary": "#hex", "accent": "#hex"}}
 - "target_audience": 1-2 sentences on ideal customer
 - "marketing_strategy": array of 3 key strategies
-- "launch_checklist": array of 8 actionable launch steps"""
+- "launch_checklist": array of 8 actionable launch steps
+- "pricing_tiers": array of 3 objects each with "name", "price", "features" (array of 3-4 strings) representing service packages (e.g. Basic, Pro, Premium)"""
 
         kit_data = None
         for attempt in range(3):
@@ -272,6 +276,7 @@ Return ONLY JSON:
         kit_id = f"kit_{uuid.uuid4().hex[:12]}"
         kit_doc = {
             "kit_id": kit_id, "hustle_id": hustle_id, "user_id": user_id,
+            "business_name": kit_data.get("business_name", hustle['name']),
             "tagline": kit_data.get("tagline", ""),
             "elevator_pitch": kit_data.get("elevator_pitch", ""),
             "social_posts": kit_data.get("social_posts", []),
@@ -279,6 +284,7 @@ Return ONLY JSON:
             "target_audience": kit_data.get("target_audience", ""),
             "marketing_strategy": kit_data.get("marketing_strategy", []),
             "launch_checklist": kit_data.get("launch_checklist", []),
+            "pricing_tiers": kit_data.get("pricing_tiers", []),
             "landing_page_html": "",
             "landing_page_status": "generating",
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -288,62 +294,144 @@ Return ONLY JSON:
         # Mark job complete so user sees stage 1 results immediately
         await db.generation_jobs.update_one({"job_id": job_id}, {"$set": {"status": "complete"}})
 
-        # ── Stage 2: Landing page (built from template + AI content — instant) ──
+        # ── Stage 2: Premium Landing Page (template + AI content) ──
+        biz_name = kit_data.get("business_name", hustle['name'])
         primary = kit_data.get("brand_colors", {}).get("primary", "#2563EB")
         accent = kit_data.get("brand_colors", {}).get("accent", "#F59E0B")
         tagline = kit_data.get("tagline", hustle['name'])
         pitch = kit_data.get("elevator_pitch", hustle['description'])
         target = kit_data.get("target_audience", "")
         strategies = kit_data.get("marketing_strategy", [])
-        checklist = kit_data.get("launch_checklist", [])
+        pricing_tiers = kit_data.get("pricing_tiers", [])
+
+        # Get user email for contact section
+        user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0, "email": 1, "name": 1})
+        user_email = user_doc.get("email", "") if user_doc else ""
+        user_name = user_doc.get("name", "") if user_doc else ""
 
         benefits_html = ""
         for i, s in enumerate(strategies[:3]):
             icons = ["⚡", "🎯", "📈"]
-            benefits_html += f'<div class="benefit"><div class="benefit-icon">{icons[i % 3]}</div><p>{s}</p></div>'
+            benefits_html += f'<div class="benefit"><div class="b-icon">{icons[i%3]}</div><h3>Strategy {i+1}</h3><p>{s}</p></div>'
 
-        steps_html = ""
-        for i, step in enumerate(checklist[:6]):
-            steps_html += f'<div class="step"><span class="step-num">{i+1}</span><p>{step}</p></div>'
+        pricing_html = ""
+        for i, tier in enumerate(pricing_tiers[:3]):
+            popular = ' popular' if i == 1 else ''
+            features = "".join(f'<li>{f}</li>' for f in tier.get("features", []))
+            cta_cls = "price-cta" if i != 1 else "price-cta price-cta-accent"
+            pop_badge = '<div class="popular-badge">Most Popular</div>' if i == 1 else ''
+            tier_name = tier.get("name", "Package")
+            tier_price = tier.get("price", "Contact us")
+            pricing_html += f'<div class="price-card{popular}">{pop_badge}<h3>{tier_name}</h3><div class="price">{tier_price}</div><ul>{features}</ul><a href="#contact" class="{cta_cls}">Get Started</a></div>'
+
+        # Logo as CSS text
+        logo_initial = biz_name[0] if biz_name else "H"
 
         html = f"""<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>{hustle['name']}</title>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{biz_name}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
 *{{margin:0;padding:0;box-sizing:border-box}}
-body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a2e;line-height:1.6}}
-.hero{{background:linear-gradient(135deg,{primary} 0%,{primary}dd 100%);color:#fff;padding:80px 24px;text-align:center}}
-.hero h1{{font-size:clamp(28px,5vw,48px);font-weight:900;margin-bottom:16px;letter-spacing:-1px}}
-.hero p{{font-size:18px;opacity:0.9;max-width:600px;margin:0 auto 32px}}
-.cta-btn{{display:inline-block;background:{accent};color:#000;font-weight:700;padding:16px 40px;border-radius:12px;text-decoration:none;font-size:18px;transition:transform 0.2s}}
-.cta-btn:hover{{transform:scale(1.05)}}
-.section{{padding:60px 24px;max-width:800px;margin:0 auto}}
-.section h2{{font-size:28px;font-weight:800;margin-bottom:24px;text-align:center}}
-.about{{background:#f8f9fa}}
-.about p{{font-size:16px;color:#555;text-align:center;max-width:600px;margin:0 auto}}
-.benefits{{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px;margin-top:16px}}
-.benefit{{background:#fff;border:1px solid #e0e0e0;border-radius:12px;padding:24px;text-align:center}}
-.benefit-icon{{font-size:32px;margin-bottom:8px}}
-.benefit p{{color:#555;font-size:14px}}
-.steps{{display:grid;gap:12px;margin-top:16px}}
-.step{{display:flex;align-items:center;gap:16px;background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px}}
-.step-num{{background:{accent};color:#000;font-weight:800;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}}
-.step p{{color:#333;font-size:14px}}
-.audience{{background:{primary}10;border-left:4px solid {primary};padding:20px;border-radius:0 10px 10px 0;margin-top:24px}}
-.audience p{{color:#555}}
-.cta-section{{background:{primary};color:#fff;padding:60px 24px;text-align:center}}
-.cta-section h2{{color:#fff;margin-bottom:16px}}
-.cta-section p{{opacity:0.9;margin-bottom:24px}}
-footer{{background:#1a1a2e;color:#aaa;padding:24px;text-align:center;font-size:13px}}
+:root{{--p:{primary};--a:{accent};--dark:#0f172a;--surface:#1e293b;--text:#f8fafc;--muted:#94a3b8}}
+body{{font-family:'Inter',system-ui,sans-serif;color:var(--text);background:var(--dark);line-height:1.7}}
+a{{text-decoration:none}}
+
+/* Nav */
+nav{{display:flex;align-items:center;justify-content:space-between;padding:20px 5%;max-width:1200px;margin:0 auto}}
+.logo-wrap{{display:flex;align-items:center;gap:12px}}
+.logo-mark{{width:44px;height:44px;background:var(--a);border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:22px;color:var(--dark)}}
+.logo-text{{font-size:22px;font-weight:800;letter-spacing:-0.5px}}
+nav a.nav-cta{{background:var(--a);color:var(--dark);padding:10px 24px;border-radius:8px;font-weight:700;font-size:14px}}
+
+/* Hero */
+.hero{{padding:80px 5% 100px;text-align:center;background:linear-gradient(180deg,var(--dark) 0%,var(--surface) 100%);position:relative;overflow:hidden}}
+.hero::before{{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle at 30% 50%,{primary}15 0%,transparent 50%);}}
+.hero h1{{font-size:clamp(32px,6vw,56px);font-weight:900;letter-spacing:-2px;line-height:1.1;margin-bottom:20px;position:relative}}
+.hero h1 span{{background:linear-gradient(135deg,var(--a),{primary});-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}}
+.hero p{{font-size:clamp(16px,2vw,20px);color:var(--muted);max-width:640px;margin:0 auto 36px;position:relative}}
+.hero-cta{{display:inline-flex;align-items:center;gap:10px;background:var(--a);color:var(--dark);font-weight:700;padding:18px 40px;border-radius:14px;font-size:18px;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 4px 24px {accent}40}}
+.hero-cta:hover{{transform:translateY(-2px);box-shadow:0 8px 32px {accent}60}}
+.trust{{display:flex;justify-content:center;gap:32px;margin-top:48px;position:relative}}
+.trust-item{{text-align:center}}
+.trust-item .num{{font-size:28px;font-weight:900;color:var(--a)}}
+.trust-item .label{{font-size:12px;color:var(--muted)}}
+
+/* Sections */
+.section{{padding:80px 5%;max-width:1000px;margin:0 auto}}
+.section-title{{font-size:clamp(24px,4vw,36px);font-weight:900;text-align:center;margin-bottom:12px;letter-spacing:-1px}}
+.section-sub{{text-align:center;color:var(--muted);margin-bottom:40px;font-size:16px}}
+.dark-bg{{background:var(--surface)}}
+
+/* Benefits */
+.benefits{{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}}
+.benefit{{background:var(--dark);border:1px solid #334155;border-radius:16px;padding:28px;transition:transform 0.2s,border-color 0.2s}}
+.benefit:hover{{transform:translateY(-4px);border-color:var(--a)}}
+.b-icon{{font-size:36px;margin-bottom:12px}}
+.benefit h3{{font-size:16px;font-weight:700;margin-bottom:8px}}
+.benefit p{{color:var(--muted);font-size:14px}}
+
+/* Pricing */
+.pricing{{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;align-items:start}}
+.price-card{{background:var(--dark);border:1px solid #334155;border-radius:16px;padding:32px;text-align:center;position:relative}}
+.price-card.popular{{border-color:var(--a);transform:scale(1.02)}}
+.popular-badge{{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--a);color:var(--dark);font-size:12px;font-weight:700;padding:4px 16px;border-radius:20px}}
+.price-card h3{{font-size:18px;font-weight:700;margin-bottom:8px}}
+.price{{font-size:36px;font-weight:900;color:var(--a);margin-bottom:16px}}
+.price-card ul{{list-style:none;text-align:left;margin-bottom:24px}}
+.price-card li{{padding:6px 0;color:var(--muted);font-size:14px;border-bottom:1px solid #334155}}
+.price-card li::before{{content:'✓ ';color:var(--a);font-weight:700}}
+.price-cta{{display:block;padding:14px;border-radius:10px;font-weight:700;border:2px solid var(--a);color:var(--a);transition:all 0.2s}}
+.price-cta:hover,.price-cta-accent{{background:var(--a);color:var(--dark);border-color:var(--a)}}
+
+/* Contact */
+.contact{{background:linear-gradient(135deg,{primary},var(--dark));padding:80px 5%;text-align:center}}
+.contact h2{{font-size:32px;font-weight:900;margin-bottom:12px}}
+.contact p{{color:var(--muted);margin-bottom:8px}}
+.contact-email{{font-size:20px;font-weight:700;color:var(--a)}}
+
+/* Footer */
+footer{{background:var(--dark);border-top:1px solid #334155;padding:24px 5%;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;font-size:13px;color:var(--muted)}}
+@media(max-width:640px){{.trust{{flex-direction:column;gap:16px}}.pricing{{grid-template-columns:1fr}}nav{{flex-direction:column;gap:12px}}footer{{flex-direction:column;text-align:center}}}}
 </style></head><body>
-<section class="hero"><h1>{tagline}</h1><p>{hustle['description']}</p><a href="#contact" class="cta-btn">Get Started Today</a></section>
-<section class="section about"><h2>About</h2><p>{pitch}</p>
-{f'<div class="audience"><strong>Built for:</strong><p>{target}</p></div>' if target else ''}
+
+<nav>
+<div class="logo-wrap"><div class="logo-mark">{logo_initial}</div><span class="logo-text">{biz_name}</span></div>
+<a href="#contact" class="nav-cta">Get a Quote</a>
+</nav>
+
+<section class="hero">
+<h1>{tagline.replace(' ', ' <span>',1).replace(' ', '</span> ',1) if ' ' in tagline else f'<span>{tagline}</span>'}</h1>
+<p>{hustle['description']}</p>
+<a href="#pricing" class="hero-cta">View Our Services →</a>
+<div class="trust">
+<div class="trust-item"><div class="num">500+</div><div class="label">Happy Clients</div></div>
+<div class="trust-item"><div class="num">4.9★</div><div class="label">Average Rating</div></div>
+<div class="trust-item"><div class="num">24hr</div><div class="label">Response Time</div></div>
+</div>
 </section>
-<section class="section"><h2>Why Choose Us</h2><div class="benefits">{benefits_html}</div></section>
-<section class="section" style="background:#f8f9fa"><h2>Your Roadmap</h2><div class="steps">{steps_html}</div></section>
-<section class="cta-section" id="contact"><h2>Ready to Start?</h2><p>Take the first step toward building your {hustle.get('category','')} business today.</p><a href="#" class="cta-btn">Launch Now</a></section>
-<footer>&copy; 2026 {hustle['name']}. All rights reserved.</footer>
+
+<section class="section"><h2 class="section-title">About {biz_name}</h2>
+<p class="section-sub">{pitch}</p>
+{f'<p class="section-sub" style="font-style:italic;font-size:14px">Built for: {target}</p>' if target else ''}
+</section>
+
+<section class="section dark-bg"><h2 class="section-title">Why Choose Us</h2>
+<p class="section-sub">What sets us apart from the competition</p>
+<div class="benefits">{benefits_html}</div></section>
+
+<section class="section" id="pricing"><h2 class="section-title">Our Packages</h2>
+<p class="section-sub">Transparent pricing. No hidden fees.</p>
+<div class="pricing">{pricing_html if pricing_html else '<p style="text-align:center;color:var(--muted)">Contact us for custom pricing</p>'}</div>
+</section>
+
+<section class="contact" id="contact"><h2>Let's Work Together</h2>
+<p>Ready to get started? Reach out today.</p>
+<p class="contact-email">{user_email}</p>
+<p style="margin-top:8px;color:var(--muted)">{user_name}</p>
+</section>
+
+<footer><span>&copy; 2026 {biz_name}. All rights reserved.</span><span>Powered by HustleAI</span></footer>
 </body></html>"""
 
         await db.launch_kits.update_one(
@@ -534,6 +622,9 @@ User Profile:
 - Timeline: {answers.get('timeline', 'Not specified')}
 - Additional skills: {additional_skills or 'None'}
 - Resume: {resume_text[:500] if resume_text else 'None'}
+- Blue collar/trade skills: {answers.get('blue_collar', 'Not specified')}
+
+IMPORTANT: If the user has blue collar/trade skills (handyman, construction, painting, automotive, etc.), include service-based hustles that leverage those hands-on skills. These can be very profitable local businesses.
 
 Return ONLY a JSON array of 12 objects. Each must have:
 - "name": string
