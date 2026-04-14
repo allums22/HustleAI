@@ -944,13 +944,13 @@ ACHIEVEMENTS = [
 ]
 
 MOTIVATION_MESSAGES = [
-    "You're leaving ${amount} on the table if you skip today. Let's get to work! 💰",
-    "Your competitors are grinding right now. Stay ahead — complete today's tasks! 🔥",
-    "Just {minutes} minutes of focused work today could earn you ${amount} this week.",
-    "Day {day} of your plan — you're {percent}% there. Don't break the streak! 🚀",
-    "The difference between dreamers and earners? Showing up daily. Let's go! 💪",
-    "Your side hustle won't build itself. ${amount}/week is waiting for you today.",
-    "Skipping today = falling behind. You've got {tasks} tasks — knock them out! ⚡",
+    "You're leaving ${weekly} this week on the table if you skip today. Let's get to work! 💰",
+    "People in your niche are earning ${monthly}/month right now. Complete today's tasks and join them! 🔥",
+    "${weekly}/week doesn't happen by accident. It takes {tasks} tasks today — you've got this! 💪",
+    "Day {day} of 30 — you're {percent}% to your first ${monthly} month. Don't stop now! 🚀",
+    "The top 1% of hustlers show up daily. ${weekly}/week is {tasks} tasks away. Let's go! ⚡",
+    "Imagine depositing ${monthly} this month from your side hustle. Today's tasks make it real. 💎",
+    "Every day you skip costs you ${weekly} this week. Crush today's {tasks} tasks in {minutes} minutes! 🎯",
 ]
 
 # ─── TASK COMPLETION ENDPOINTS ───
@@ -1138,7 +1138,7 @@ async def get_daily_motivation(user: dict = Depends(get_current_user)):
     income_str = hustles[0].get("potential_income", "$500/week") if hustles else "$500/week"
     nums = re.findall(r'[\d,]+', income_str.replace(',', ''))
     weekly_est = int(nums[0]) if nums else 500
-    daily_est = round(weekly_est / 7)
+    monthly_est = weekly_est * 4
     streak_data = await db.task_completions.find(
         {"user_id": user["user_id"]}, {"_id": 0}).sort("completed_at", -1).to_list(1)
     plan = await db.business_plans.find_one(
@@ -1158,10 +1158,11 @@ async def get_daily_motivation(user: dict = Depends(get_current_user)):
     percent = min(100, round((current_day / 30) * 100))
     idx = hash(datetime.now(timezone.utc).strftime("%Y-%m-%d") + user["user_id"]) % len(MOTIVATION_MESSAGES)
     msg = MOTIVATION_MESSAGES[idx]
-    msg = msg.replace("{amount}", str(daily_est)).replace("{day}", str(current_day))
+    msg = msg.replace("{weekly}", str(weekly_est)).replace("{monthly}", f"{monthly_est:,}")
+    msg = msg.replace("{day}", str(current_day))
     msg = msg.replace("{percent}", str(percent)).replace("{tasks}", str(today_tasks))
-    msg = msg.replace("{minutes}", str(today_tasks * 15))
-    return {"message": msg, "daily_estimate": daily_est, "weekly_estimate": weekly_est,
+    msg = msg.replace("{minutes}", str(max(today_tasks * 15, 15)))
+    return {"message": msg, "weekly_estimate": weekly_est, "monthly_estimate": monthly_est,
             "current_day": current_day, "today_tasks": today_tasks, "percent": percent}
 
 # ─── REAL STATS FOR LANDING PAGE ───
