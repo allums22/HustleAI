@@ -245,22 +245,22 @@ Description: {hustle['description']}
 Category: {hustle.get('category', 'General')}
 
 Return ONLY JSON:
-- "business_name": a creative, professional business name for this hustle (not the hustle name itself, a real brand name)
-- "tagline": catchy tagline under 10 words
-- "elevator_pitch": 30-second pitch (~80 words)
-- "social_posts": array of 5 social media captions with emojis/hashtags
-- "brand_colors": {{"primary": "#hex", "accent": "#hex"}}
-- "target_audience": 1-2 sentences on ideal customer
-- "marketing_strategy": array of 3 key strategies
-- "launch_checklist": array of 8 actionable launch steps
-- "pricing_tiers": array of 3 objects each with "name", "price", "features" (array of 3-4 strings) representing service packages (e.g. Basic, Pro, Premium)"""
+- "business_name": a SHORT, memorable, premium brand name (1-2 words max, like "Apex", "Rivian", "Stripe", "Notion"). Must sound like a real funded startup — no generic phrases, no "Pro Solutions" type names. Think Y Combinator company names.
+- "tagline": punchy tagline under 8 words that creates urgency or aspiration
+- "elevator_pitch": 30-second pitch (~80 words) — confident, specific, results-oriented
+- "social_posts": array of 5 social media captions with emojis/hashtags — each should sound like a real brand posting, not AI-generated
+- "brand_colors": {{"primary": "#hex", "accent": "#hex"}} — choose bold, modern colors that feel premium (avoid generic blue/orange combos)
+- "target_audience": 1-2 sentences on ideal customer with specific demographics
+- "marketing_strategy": array of 3 key strategies with specific tactics (not vague advice)
+- "launch_checklist": array of 8 actionable launch steps with clear deliverables
+- "pricing_tiers": array of 3 objects each with "name", "price", "features" (array of 3-4 strings) representing service packages — use creative tier names (not just Basic/Pro/Premium)"""
 
         kit_data = None
         for attempt in range(3):
             try:
                 chat = LlmChat(api_key=emergent_key,
                     session_id=f"kit1_{user_id}_{hustle_id}_{uuid.uuid4().hex[:4]}",
-                    system_message="Expert brand strategist. Return valid JSON only. Be concise.")
+                    system_message="You are a top-tier Silicon Valley brand strategist who has named companies like Stripe, Notion, and Linear. Create premium, venture-backed quality brand assets. Return valid JSON only. Be specific and bold.")
                 chat.with_model("openai", "gpt-5.2")
                 response = await chat.send_message(UserMessage(text=prompt1))
                 kit_data = parse_json_from_response(response)
@@ -402,13 +402,13 @@ footer{{background:var(--dark);border-top:1px solid #334155;padding:24px 5%;disp
 </nav>
 
 <section class="hero">
-<h1>{tagline.replace(' ', ' <span>',1).replace(' ', '</span> ',1) if ' ' in tagline else f'<span>{tagline}</span>'}</h1>
-<p>{hustle['description']}</p>
-<a href="#pricing" class="hero-cta">View Our Services →</a>
+<h1><span>{tagline}</span></h1>
+<p>{pitch}</p>
+<a href="#contact" class="hero-cta">Get Started Today →</a>
 </section>
 
-<section class="section"><h2 class="section-title">About {biz_name}</h2>
-<p class="section-sub">{pitch}</p>
+<section class="section"><h2 class="section-title">What We Do</h2>
+<p class="section-sub">{hustle['description']}</p>
 {f'<p class="section-sub" style="font-style:italic;font-size:14px">Built for: {target}</p>' if target else ''}
 </section>
 

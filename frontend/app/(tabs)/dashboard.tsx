@@ -121,20 +121,20 @@ export default function DashboardScreen() {
 
         {/* Stats Cards */}
         <View style={styles.statsRow}>
-          <View style={[styles.statCard, { backgroundColor: Colors.trustBlueLight }]}>
+          <TouchableOpacity style={[styles.statCard, { backgroundColor: Colors.trustBlueLight }]} onPress={() => router.push('/(tabs)/hustles')} activeOpacity={0.7}>
             <Text style={[styles.statNumber, { color: Colors.trustBlue }]}>{hustles.length}</Text>
             <Text style={styles.statLabel}>Total Hustles</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: Colors.growthGreenLight }]}>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.statCard, { backgroundColor: Colors.growthGreenLight }]} onPress={() => router.push('/(tabs)/progress')} activeOpacity={0.7}>
             <Text style={[styles.statNumber, { color: Colors.growthGreen }]}>{profile?.stats?.plans_generated || 0}</Text>
             <Text style={styles.statLabel}>Plans</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: Colors.orangeLight }]}>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.statCard, { backgroundColor: Colors.orangeLight }]} onPress={() => router.push('/pricing')} activeOpacity={0.7}>
             <Text style={[styles.statNumber, { color: Colors.orangeCTA }]}>
               {tier === 'pro' || tier === 'empire' ? '∞' : remainingPlans}
             </Text>
             <Text style={styles.statLabel}>{tier === 'free' && !trialUsed ? 'Free Trial' : 'Remaining'}</Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* Quick Actions */}
