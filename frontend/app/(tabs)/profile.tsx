@@ -23,10 +23,17 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: async () => { await logout(); router.replace('/'); }},
-    ]);
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm('Are you sure you want to logout?');
+      if (confirmed) {
+        logout().then(() => router.replace('/'));
+      }
+    } else {
+      Alert.alert('Logout', 'Are you sure?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Logout', style: 'destructive', onPress: async () => { await logout(); router.replace('/'); }},
+      ]);
+    }
   };
 
   const handleShareReferral = async () => {
