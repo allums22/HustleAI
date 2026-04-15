@@ -47,20 +47,6 @@ export default function LandingPage() {
           <Text style={styles.heroSub}>AI analyzes your skills, generates personalized side hustles, and builds you a complete business plan with execution calendar.</Text>
         </View>
 
-        {/* Social Proof */}
-        <View style={styles.proofRow}>
-          {[
-            { num: '10,000+', label: 'Hustles Generated' },
-            { num: '$2.5M+', label: 'Revenue Potential' },
-            { num: '4.9★', label: 'User Rating' },
-          ].map((s, i) => (
-            <View key={i} style={styles.proofItem}>
-              <Text style={styles.proofNum}>{s.num}</Text>
-              <Text style={styles.proofLabel}>{s.label}</Text>
-            </View>
-          ))}
-        </View>
-
         {/* Features */}
         <View style={styles.featuresGrid}>
           {[
@@ -104,13 +90,6 @@ export default function LandingPage() {
               <Text style={styles.trustText}>{t}</Text>
             </View>
           ))}
-        </View>
-
-        {/* Testimonial */}
-        <View style={styles.testimonialCard}>
-          <Ionicons name="chatbubble-ellipses" size={20} color={Colors.gold} />
-          <Text style={styles.testimonialText}>"HustleAI found me a side hustle I never would have thought of. The 30-day plan was so detailed I started making money in week 2."</Text>
-          <Text style={styles.testimonialAuthor}>— Sarah M., Starter Plan</Text>
         </View>
       </ScrollView>
     </SafeAreaView>

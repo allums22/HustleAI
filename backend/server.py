@@ -405,11 +405,6 @@ footer{{background:var(--dark);border-top:1px solid #334155;padding:24px 5%;disp
 <h1>{tagline.replace(' ', ' <span>',1).replace(' ', '</span> ',1) if ' ' in tagline else f'<span>{tagline}</span>'}</h1>
 <p>{hustle['description']}</p>
 <a href="#pricing" class="hero-cta">View Our Services →</a>
-<div class="trust">
-<div class="trust-item"><div class="num">500+</div><div class="label">Happy Clients</div></div>
-<div class="trust-item"><div class="num">4.9★</div><div class="label">Average Rating</div></div>
-<div class="trust-item"><div class="num">24hr</div><div class="label">Response Time</div></div>
-</div>
 </section>
 
 <section class="section"><h2 class="section-title">About {biz_name}</h2>
