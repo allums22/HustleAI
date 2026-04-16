@@ -184,14 +184,10 @@ async def _bg_generate_plan(hustle_id: str, user_id: str, hustle: dict, answers:
     job_id = f"job_plan_{hustle_id}"
     try:
         await db.generation_jobs.update_one({"job_id": job_id}, {"$set": {"status": "generating"}})
-        prompt = f"""Create a 30-day business plan for:
-Side Hustle: {hustle['name']}
-Description: {hustle['description']}
-Hours: {answers.get('hours_per_week', '10-20')}/week
-Budget: {answers.get('budget', '$100-$500')}
-Goal: {answers.get('income_goal', '$1000-$3000')}/month
+        prompt = f"""30-day business plan for "{hustle['name']}" ({hustle['description'][:80]}). {answers.get('hours_per_week', '10-20')} hrs/week, {answers.get('budget', '$100-$500')} budget, goal: {answers.get('income_goal', '$1000-$3000')}/mo.
 
-Return ONLY JSON: "title", "overview" (2 paragraphs), "daily_tasks" (30 items with day/title/tasks/estimated_hours), "milestones" (4 for days 7,14,21,30 with day/title/description/expected_outcome), "resources_needed" (array), "total_estimated_cost"."""
+Return ONLY JSON with: "title", "overview" (1 paragraph), "daily_tasks" (array of 30: day/title/tasks array of 2-3 strings/estimated_hours), "milestones" (4 items for days 7,14,21,30: day/title/description/expected_outcome), "resources_needed" (3-5 items), "total_estimated_cost".
+Keep task descriptions SHORT (under 10 words each). Be specific and actionable."""
 
         max_retries = 3
         plan_data = None
@@ -313,122 +309,144 @@ Return ONLY JSON:
         benefits_html = ""
         for i, s in enumerate(strategies[:3]):
             icons = ["⚡", "🎯", "📈"]
-            benefits_html += f'<div class="benefit"><div class="b-icon">{icons[i%3]}</div><h3>Strategy {i+1}</h3><p>{s}</p></div>'
+            benefits_html += f'<div class="card"><div class="card-icon">{icons[i%3]}</div><h3>Strategy {i+1}</h3><p>{s}</p></div>'
 
         pricing_html = ""
         for i, tier in enumerate(pricing_tiers[:3]):
-            popular = ' popular' if i == 1 else ''
+            featured = ' featured' if i == 1 else ''
             features = "".join(f'<li>{f}</li>' for f in tier.get("features", []))
-            cta_cls = "price-cta" if i != 1 else "price-cta price-cta-accent"
-            pop_badge = '<div class="popular-badge">Most Popular</div>' if i == 1 else ''
             tier_name = tier.get("name", "Package")
             tier_price = tier.get("price", "Contact us")
-            pricing_html += f'<div class="price-card{popular}">{pop_badge}<h3>{tier_name}</h3><div class="price">{tier_price}</div><ul>{features}</ul><a href="#contact" class="{cta_cls}">Get Started</a></div>'
+            pricing_html += f'<div class="price-card{featured}"><h3>{tier_name}</h3><div class="price-amount">{tier_price}</div><ul>{features}</ul><a href="#contact" class="price-btn">Get Started</a></div>'
 
         # Logo as CSS text
         logo_initial = biz_name[0] if biz_name else "H"
 
+        # Pick a template style variation based on hustle name hash
+        style_variant = hash(hustle['name']) % 3  # 0, 1, or 2
+        
+        # Generate a gradient direction and glow based on variant
+        gradients = [
+            f"linear-gradient(135deg, {primary}, {accent})",
+            f"linear-gradient(160deg, {accent}, {primary})",
+            f"linear-gradient(45deg, {primary}, #000, {accent})",
+        ]
+        hero_bg_variants = [
+            f"radial-gradient(ellipse at 20% 50%, {primary}20 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, {accent}15 0%, transparent 50%)",
+            f"radial-gradient(circle at 50% 0%, {accent}25 0%, transparent 50%), radial-gradient(circle at 0% 100%, {primary}15 0%, transparent 50%)",
+            f"radial-gradient(ellipse at 70% 80%, {primary}20 0%, transparent 50%), radial-gradient(circle at 20% 20%, {accent}18 0%, transparent 40%)",
+        ]
+        font_variants = [
+            "'Inter', system-ui, sans-serif",
+            "'Inter', system-ui, sans-serif",
+            "'Inter', system-ui, sans-serif",
+        ]
+        hero_gradient = hero_bg_variants[style_variant]
+        card_border_radius = ["20px", "16px", "24px"][style_variant]
+
         html = f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{biz_name}</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 *{{margin:0;padding:0;box-sizing:border-box}}
-:root{{--p:{primary};--a:{accent};--dark:#0f172a;--surface:#1e293b;--text:#f8fafc;--muted:#94a3b8}}
-body{{font-family:'Inter',system-ui,sans-serif;color:var(--text);background:var(--dark);line-height:1.7}}
-a{{text-decoration:none}}
+:root{{--p:{primary};--a:{accent};--bg:#050505;--surface:#111113;--surface2:#1a1a1f;--text:#f0f0f5;--muted:#888894;--border:#2a2a30}}
+body{{font-family:{font_variants[style_variant]};color:var(--text);background:var(--bg);line-height:1.7;-webkit-font-smoothing:antialiased}}
+a{{text-decoration:none;color:inherit}}
 
-/* Nav */
-nav{{display:flex;align-items:center;justify-content:space-between;padding:20px 5%;max-width:1200px;margin:0 auto}}
-.logo-wrap{{display:flex;align-items:center;gap:12px}}
-.logo-mark{{width:44px;height:44px;background:var(--a);border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:22px;color:var(--dark)}}
-.logo-text{{font-size:22px;font-weight:800;letter-spacing:-0.5px}}
-nav a.nav-cta{{background:var(--a);color:var(--dark);padding:10px 24px;border-radius:8px;font-weight:700;font-size:14px}}
+nav{{display:flex;align-items:center;justify-content:space-between;padding:18px 6%;max-width:1200px;margin:0 auto}}
+.logo{{display:flex;align-items:center;gap:10px}}
+.logo-mark{{width:40px;height:40px;background:{gradients[style_variant]};border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:20px;color:#fff}}
+.logo-name{{font-size:20px;font-weight:800;letter-spacing:-0.5px}}
+.nav-cta{{background:var(--a);color:#000;padding:10px 22px;border-radius:10px;font-weight:700;font-size:13px;transition:opacity 0.2s}}
+.nav-cta:hover{{opacity:0.85}}
 
-/* Hero */
-.hero{{padding:80px 5% 100px;text-align:center;background:linear-gradient(180deg,var(--dark) 0%,var(--surface) 100%);position:relative;overflow:hidden}}
-.hero::before{{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle at 30% 50%,{primary}15 0%,transparent 50%);}}
-.hero h1{{font-size:clamp(32px,6vw,56px);font-weight:900;letter-spacing:-2px;line-height:1.1;margin-bottom:20px;position:relative}}
-.hero h1 span{{background:linear-gradient(135deg,var(--a),{primary});-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}}
-.hero p{{font-size:clamp(16px,2vw,20px);color:var(--muted);max-width:640px;margin:0 auto 36px;position:relative}}
-.hero-cta{{display:inline-flex;align-items:center;gap:10px;background:var(--a);color:var(--dark);font-weight:700;padding:18px 40px;border-radius:14px;font-size:18px;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 4px 24px {accent}40}}
-.hero-cta:hover{{transform:translateY(-2px);box-shadow:0 8px 32px {accent}60}}
-.trust{{display:flex;justify-content:center;gap:32px;margin-top:48px;position:relative}}
-.trust-item{{text-align:center}}
-.trust-item .num{{font-size:28px;font-weight:900;color:var(--a)}}
-.trust-item .label{{font-size:12px;color:var(--muted)}}
+.hero{{padding:100px 6% 120px;text-align:center;position:relative;overflow:hidden}}
+.hero::before{{content:'';position:absolute;inset:0;background:{hero_gradient};pointer-events:none}}
+.hero-content{{position:relative;max-width:720px;margin:0 auto}}
+.hero h1{{font-size:clamp(36px,7vw,64px);font-weight:900;letter-spacing:-2.5px;line-height:1.05;margin-bottom:24px}}
+.hero h1 .accent{{background:{gradients[style_variant]};-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}}
+.hero p{{font-size:clamp(16px,2vw,20px);color:var(--muted);max-width:540px;margin:0 auto 40px;line-height:1.6}}
+.hero-cta{{display:inline-flex;align-items:center;gap:10px;background:var(--a);color:#000;font-weight:700;padding:16px 36px;border-radius:12px;font-size:17px;transition:all 0.2s;box-shadow:0 0 40px {accent}30}}
+.hero-cta:hover{{transform:translateY(-2px);box-shadow:0 0 60px {accent}50}}
 
-/* Sections */
-.section{{padding:80px 5%;max-width:1000px;margin:0 auto}}
-.section-title{{font-size:clamp(24px,4vw,36px);font-weight:900;text-align:center;margin-bottom:12px;letter-spacing:-1px}}
-.section-sub{{text-align:center;color:var(--muted);margin-bottom:40px;font-size:16px}}
-.dark-bg{{background:var(--surface)}}
+.section{{padding:80px 6%;max-width:960px;margin:0 auto}}
+.section-tag{{display:inline-block;background:{primary}15;color:var(--p);font-size:12px;font-weight:700;padding:6px 14px;border-radius:20px;margin-bottom:16px;text-transform:uppercase;letter-spacing:1px}}
+.section-title{{font-size:clamp(28px,4vw,40px);font-weight:900;letter-spacing:-1.5px;margin-bottom:12px}}
+.section-sub{{color:var(--muted);font-size:16px;max-width:600px;line-height:1.6}}
+.section-center{{text-align:center}}.section-center .section-sub{{margin:0 auto 40px}}
 
-/* Benefits */
-.benefits{{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}}
-.benefit{{background:var(--dark);border:1px solid #334155;border-radius:16px;padding:28px;transition:transform 0.2s,border-color 0.2s}}
-.benefit:hover{{transform:translateY(-4px);border-color:var(--a)}}
-.b-icon{{font-size:36px;margin-bottom:12px}}
-.benefit h3{{font-size:16px;font-weight:700;margin-bottom:8px}}
-.benefit p{{color:var(--muted);font-size:14px}}
+.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:32px}}
+.card{{background:var(--surface);border:1px solid var(--border);border-radius:{card_border_radius};padding:28px;transition:all 0.25s}}
+.card:hover{{border-color:var(--a);transform:translateY(-3px)}}
+.card-icon{{font-size:32px;margin-bottom:14px}}
+.card h3{{font-size:17px;font-weight:700;margin-bottom:6px}}
+.card p{{color:var(--muted);font-size:14px;line-height:1.5}}
 
-/* Pricing */
-.pricing{{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;align-items:start}}
-.price-card{{background:var(--dark);border:1px solid #334155;border-radius:16px;padding:32px;text-align:center;position:relative}}
-.price-card.popular{{border-color:var(--a);transform:scale(1.02)}}
-.popular-badge{{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--a);color:var(--dark);font-size:12px;font-weight:700;padding:4px 16px;border-radius:20px}}
-.price-card h3{{font-size:18px;font-weight:700;margin-bottom:8px}}
-.price{{font-size:36px;font-weight:900;color:var(--a);margin-bottom:16px}}
-.price-card ul{{list-style:none;text-align:left;margin-bottom:24px}}
-.price-card li{{padding:6px 0;color:var(--muted);font-size:14px;border-bottom:1px solid #334155}}
+.pricing{{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;align-items:start}}
+.price-card{{background:var(--surface);border:1px solid var(--border);border-radius:{card_border_radius};padding:32px;text-align:center;position:relative;transition:all 0.25s}}
+.price-card.featured{{border-color:var(--a);background:var(--surface2)}}
+.price-card.featured::before{{content:'POPULAR';position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:{gradients[style_variant]};color:#000;font-size:11px;font-weight:800;padding:4px 16px;border-radius:20px;letter-spacing:0.5px}}
+.price-card h3{{font-size:16px;font-weight:700;margin-bottom:6px;color:var(--muted)}}
+.price-amount{{font-size:40px;font-weight:900;margin-bottom:20px}}
+.price-amount .currency{{font-size:18px;vertical-align:super;margin-right:2px}}
+.price-card ul{{list-style:none;text-align:left;margin-bottom:28px}}
+.price-card li{{padding:8px 0;color:var(--muted);font-size:14px;border-bottom:1px solid var(--border)}}
 .price-card li::before{{content:'✓ ';color:var(--a);font-weight:700}}
-.price-cta{{display:block;padding:14px;border-radius:10px;font-weight:700;border:2px solid var(--a);color:var(--a);transition:all 0.2s}}
-.price-cta:hover,.price-cta-accent{{background:var(--a);color:var(--dark);border-color:var(--a)}}
+.price-btn{{display:block;padding:14px;border-radius:12px;font-weight:700;font-size:15px;border:2px solid var(--border);color:var(--text);transition:all 0.2s;cursor:pointer}}
+.price-btn:hover,.price-card.featured .price-btn{{background:var(--a);color:#000;border-color:var(--a)}}
 
-/* Contact */
-.contact{{background:linear-gradient(135deg,{primary},var(--dark));padding:80px 5%;text-align:center}}
-.contact h2{{font-size:32px;font-weight:900;margin-bottom:12px}}
-.contact p{{color:var(--muted);margin-bottom:8px}}
-.contact-email{{font-size:20px;font-weight:700;color:var(--a)}}
+.cta-section{{background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:80px 6%;text-align:center}}
+.cta-section h2{{font-size:clamp(24px,4vw,36px);font-weight:900;letter-spacing:-1px;margin-bottom:12px}}
+.cta-section p{{color:var(--muted);margin-bottom:4px;font-size:16px}}
+.contact-email{{font-size:22px;font-weight:800;background:{gradients[style_variant]};-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}}
 
-/* Footer */
-footer{{background:var(--dark);border-top:1px solid #334155;padding:24px 5%;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;font-size:13px;color:var(--muted)}}
-@media(max-width:640px){{.trust{{flex-direction:column;gap:16px}}.pricing{{grid-template-columns:1fr}}nav{{flex-direction:column;gap:12px}}footer{{flex-direction:column;text-align:center}}}}
+footer{{padding:24px 6%;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted)}}
+@media(max-width:640px){{.pricing{{grid-template-columns:1fr}}nav{{padding:16px 5%}}footer{{flex-direction:column;text-align:center}}.hero{{padding:60px 5% 80px}}}}
 </style></head><body>
 
 <nav>
-<div class="logo-wrap"><div class="logo-mark">{logo_initial}</div><span class="logo-text">{biz_name}</span></div>
-<a href="#contact" class="nav-cta">Get a Quote</a>
+<div class="logo"><div class="logo-mark">{logo_initial}</div><span class="logo-name">{biz_name}</span></div>
+<a href="#contact" class="nav-cta">Get Started</a>
 </nav>
 
 <section class="hero">
-<h1><span>{tagline}</span></h1>
+<div class="hero-content">
+<h1><span class="accent">{tagline}</span></h1>
 <p>{pitch}</p>
 <a href="#contact" class="hero-cta">Get Started Today →</a>
+</div>
 </section>
 
-<section class="section"><h2 class="section-title">What We Do</h2>
-<p class="section-sub">{hustle['description']}</p>
-{f'<p class="section-sub" style="font-style:italic;font-size:14px">Built for: {target}</p>' if target else ''}
+<section class="section">
+<span class="section-tag">What We Do</span>
+<h2 class="section-title">{hustle['description'][:100]}</h2>
+<p class="section-sub">{target}</p>
 </section>
 
-<section class="section dark-bg"><h2 class="section-title">Why Choose Us</h2>
-<p class="section-sub">What sets us apart from the competition</p>
-<div class="benefits">{benefits_html}</div></section>
+<section class="section section-center" style="background:var(--surface);border-radius:0;max-width:100%;padding:80px 6%">
+<span class="section-tag">Why Us</span>
+<h2 class="section-title">Built Different</h2>
+<p class="section-sub">What makes us the right choice</p>
+<div class="cards" style="max-width:960px;margin:32px auto 0">{benefits_html}</div>
+</section>
 
-<section class="section" id="pricing"><h2 class="section-title">Our Packages</h2>
-<p class="section-sub">Transparent pricing. No hidden fees.</p>
+<section class="section section-center" id="pricing">
+<span class="section-tag">Pricing</span>
+<h2 class="section-title">Simple, Transparent Pricing</h2>
+<p class="section-sub">Choose the package that fits your needs</p>
 <div class="pricing">{pricing_html if pricing_html else '<p style="text-align:center;color:var(--muted)">Contact us for custom pricing</p>'}</div>
 </section>
 
-<section class="contact" id="contact"><h2>Let's Work Together</h2>
-<p>Ready to get started? Reach out today.</p>
-<p class="contact-email">{user_email}</p>
-{f'<p style="margin-top:4px;font-size:18px;font-weight:600;color:var(--a)">{user_phone}</p>' if user_phone else ''}
+<section class="cta-section" id="contact">
+<h2>Ready to Start?</h2>
+<p>Reach out and let's make it happen.</p>
+<p class="contact-email" style="margin-top:16px">{user_email}</p>
+{f'<p style="margin-top:8px;font-size:18px;font-weight:700;color:var(--a)">{user_phone}</p>' if user_phone else ''}
 <p style="margin-top:8px;color:var(--muted)">{user_name}</p>
 </section>
 
-<footer><span>&copy; 2026 {biz_name}. All rights reserved.</span><span>Powered by HustleAI</span></footer>
+<footer><span>&copy; 2026 {biz_name}</span><span style="opacity:0.5">Powered by HustleAI</span></footer>
 </body></html>"""
 
         await db.launch_kits.update_one(
@@ -601,46 +619,52 @@ async def generate_hustles(user: dict = Depends(get_current_user)):
     additional_skills = qr.get("additional_skills", "")
     resume_text = qr.get("resume_text", "")
 
-    prompt = f"""Based on the following user profile, generate exactly 12 UNIQUE and DIVERSE side hustle recommendations. Each hustle MUST be distinctly different from the others — no similar concepts or overlapping ideas.
+    # Check if user has blue collar skills
+    blue_collar_skills = answers.get('blue_collar', [])
+    has_blue_collar = isinstance(blue_collar_skills, list) and len(blue_collar_skills) > 0 and 'None of these' not in blue_collar_skills
+    if isinstance(blue_collar_skills, str):
+        has_blue_collar = blue_collar_skills and blue_collar_skills != 'None of these'
 
-CRITICAL RULES:
-- Every hustle must be a DIFFERENT type of business/service
-- Do NOT repeat categories or similar business models
-- Mix digital, physical, service, product, and creative hustles
-- If the user has blue collar/trade skills, at LEAST 3 hustles must directly use those specific trade skills (e.g., if they know construction, suggest specific construction services; if electrical, suggest electrical services)
+    blue_collar_instruction = ""
+    if has_blue_collar:
+        skills_str = ', '.join(blue_collar_skills) if isinstance(blue_collar_skills, list) else blue_collar_skills
+        blue_collar_instruction = f"""
+MANDATORY BLUE COLLAR REQUIREMENT:
+The user has these trade skills: {skills_str}
+You MUST include AT LEAST 5 hustles that are DIRECTLY hands-on trade/labor businesses using these exact skills.
+Examples: "Residential Bathroom Remodeling", "Emergency Plumbing Service", "Custom Deck Building", "Mobile Auto Detailing", "Commercial Painting Crew", "Appliance Repair Service", "Landscape Design & Installation", "Welding & Metal Fabrication Shop"
+These must NOT be digital or online businesses. They must be physical, hands-on work.
+"""
 
-Generate TWO categories:
-- First 5 hustles: "starter" tier — Low/no startup cost, $100-$500/week. Beginner-friendly.
-- Next 7 hustles: "premium" tier — $1000-$5000/week potential. May require investment.
+    prompt = f"""Generate exactly 12 UNIQUE side hustle recommendations for this user.
+
+{blue_collar_instruction}
+
+RULES:
+- Every hustle must be completely different — no overlapping business models
+- Mix of service, product, digital, and physical hustles
+- Be SPECIFIC with business names (not generic like "Consulting" — say "SaaS Onboarding Audit Service")
+
+Categories:
+- First 5: "starter" tier — $100-$500/week, low startup cost
+- Next 7: "premium" tier — $1000-$5000/week, may need investment
 
 User Profile:
 - Profession: {answers.get('profession', 'Not specified')}
 - Skills: {answers.get('skills', 'Not specified')}
-- Available hours: {answers.get('hours_per_week', 'Not specified')}/week
+- Hours: {answers.get('hours_per_week', 'Not specified')}/week
 - Budget: {answers.get('budget', 'Not specified')}
 - Income goal: {answers.get('income_goal', 'Not specified')}/month
 - Interests: {answers.get('interests', 'Not specified')}
-- Risk tolerance: {answers.get('risk_tolerance', 'Not specified')}
+- Risk: {answers.get('risk_tolerance', 'Not specified')}
 - Work style: {answers.get('work_style', 'Not specified')}
-- Tech comfort: {answers.get('tech_comfort', 'Not specified')}
+- Tech: {answers.get('tech_comfort', 'Not specified')}
 - Timeline: {answers.get('timeline', 'Not specified')}
-- Blue collar/trade skills: {answers.get('blue_collar', 'None')}
-- Additional skills: {additional_skills or 'None'}
-- Resume: {resume_text[:500] if resume_text else 'None'}
+- Trade skills: {answers.get('blue_collar', 'None')}
+- Extra skills: {additional_skills or 'None'}
+{f'- Resume: {resume_text[:300]}' if resume_text else ''}
 
-IMPORTANT: If blue collar skills are listed (anything other than "None of these"), you MUST generate hustles that directly leverage those exact skills. For example: construction → "Residential Remodeling Service", electrician → "Smart Home Electrical Installation", painting → "Premium Interior Painting Company", etc.
-
-Return ONLY a JSON array of 12 objects. Each must have:
-- "name": string
-- "description": string (2-3 sentences)
-- "potential_income": string (e.g. "$200-$400/week" for starter, "$1500-$3000/week" for premium)
-- "difficulty": "Easy"|"Medium"|"Hard"
-- "time_required": string (e.g. "5-10 hours/week")
-- "category": string
-- "why_good_fit": string
-- "hustle_tier": "starter"|"premium"
-
-Return ONLY valid JSON array."""
+Return ONLY JSON array of 12 objects with: "name", "description" (2 sentences), "potential_income", "difficulty" (Easy/Medium/Hard), "time_required", "category", "why_good_fit", "hustle_tier" (starter/premium)."""
 
     try:
         chat = LlmChat(
@@ -1104,13 +1128,15 @@ async def customize_landing_page(hustle_id: str, request: Request, user: dict = 
     return {"status": "ok", "html": html}
 
 # ─── AI MENTOR ───
+class MentorRequest(BaseModel):
+    message: str
+
 @api_router.post("/mentor/{hustle_id}/chat")
-async def mentor_chat(hustle_id: str, request: Request, user: dict = Depends(get_current_user)):
+async def mentor_chat(hustle_id: str, req: MentorRequest, user: dict = Depends(get_current_user)):
     tier = user.get("subscription_tier", "free")
     if tier == "free":
         raise HTTPException(status_code=403, detail="AI Mentor is available on Starter, Pro, and Empire plans. Upgrade to get personalized coaching!")
-    body = await request.json()
-    message = body.get("message", "").strip()
+    message = req.message.strip()
     if not message:
         raise HTTPException(status_code=400, detail="Message required")
     hustle = await db.side_hustles.find_one({"hustle_id": hustle_id, "user_id": user["user_id"]}, {"_id": 0})
@@ -1131,7 +1157,7 @@ You are a hands-on, experienced mentor. Give specific, actionable advice. Be enc
 
     try:
         chat = LlmChat(api_key=emergent_key,
-            session_id=f"mentor_{user['user_id']}_{hustle_id}",
+            session_id=f"mentor_{user['user_id']}_{hustle_id}_{uuid.uuid4().hex[:4]}",
             system_message=system)
         chat.with_model("openai", "gpt-5.2")
         response = await chat.send_message(UserMessage(text=message))
