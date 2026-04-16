@@ -290,7 +290,7 @@ Return ONLY JSON:
         # Mark job complete so user sees stage 1 results immediately
         await db.generation_jobs.update_one({"job_id": job_id}, {"$set": {"status": "complete"}})
 
-        # ── Stage 2: Premium Landing Page (template + AI content) ──
+        # ── Stage 2: AI-Generated Custom Landing Page ──
         biz_name = kit_data.get("business_name", hustle['name'])
         primary = kit_data.get("brand_colors", {}).get("primary", "#2563EB")
         accent = kit_data.get("brand_colors", {}).get("accent", "#F59E0B")
@@ -300,154 +300,76 @@ Return ONLY JSON:
         strategies = kit_data.get("marketing_strategy", [])
         pricing_tiers = kit_data.get("pricing_tiers", [])
 
-        # Get user email + phone for contact section
+        # Get user contact info
         user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0, "email": 1, "name": 1, "phone": 1})
         user_email = user_doc.get("email", "") if user_doc else ""
         user_name = user_doc.get("name", "") if user_doc else ""
         user_phone = user_doc.get("phone", "") if user_doc else ""
 
-        benefits_html = ""
-        for i, s in enumerate(strategies[:3]):
-            icons = ["⚡", "🎯", "📈"]
-            benefits_html += f'<div class="card"><div class="card-icon">{icons[i%3]}</div><h3>Strategy {i+1}</h3><p>{s}</p></div>'
+        pricing_json = json.dumps(pricing_tiers[:3]) if pricing_tiers else "[]"
+        strategies_json = json.dumps(strategies[:3]) if strategies else "[]"
 
-        pricing_html = ""
-        for i, tier in enumerate(pricing_tiers[:3]):
-            featured = ' featured' if i == 1 else ''
-            features = "".join(f'<li>{f}</li>' for f in tier.get("features", []))
-            tier_name = tier.get("name", "Package")
-            tier_price = tier.get("price", "Contact us")
-            pricing_html += f'<div class="price-card{featured}"><h3>{tier_name}</h3><div class="price-amount">{tier_price}</div><ul>{features}</ul><a href="#contact" class="price-btn">Get Started</a></div>'
+        lp_prompt = f"""Build a complete, production-ready, single-page landing page in HTML/CSS for this business:
 
-        # Logo as CSS text
-        logo_initial = biz_name[0] if biz_name else "H"
+BUSINESS NAME: {biz_name}
+TAGLINE: {tagline}
+ELEVATOR PITCH: {pitch}
+TARGET AUDIENCE: {target}
+CATEGORY: {hustle.get('category', 'General')}
+BRAND COLORS: Primary {primary}, Accent {accent}
+CONTACT EMAIL: {user_email}
+CONTACT PHONE: {user_phone}
+CONTACT NAME: {user_name}
+MARKETING STRATEGIES: {strategies_json}
+PRICING TIERS: {pricing_json}
 
-        # Pick a template style variation based on hustle name hash
-        style_variant = hash(hustle['name']) % 3  # 0, 1, or 2
-        
-        # Generate a gradient direction and glow based on variant
-        gradients = [
-            f"linear-gradient(135deg, {primary}, {accent})",
-            f"linear-gradient(160deg, {accent}, {primary})",
-            f"linear-gradient(45deg, {primary}, #000, {accent})",
-        ]
-        hero_bg_variants = [
-            f"radial-gradient(ellipse at 20% 50%, {primary}20 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, {accent}15 0%, transparent 50%)",
-            f"radial-gradient(circle at 50% 0%, {accent}25 0%, transparent 50%), radial-gradient(circle at 0% 100%, {primary}15 0%, transparent 50%)",
-            f"radial-gradient(ellipse at 70% 80%, {primary}20 0%, transparent 50%), radial-gradient(circle at 20% 20%, {accent}18 0%, transparent 40%)",
-        ]
-        font_variants = [
-            "'Inter', system-ui, sans-serif",
-            "'Inter', system-ui, sans-serif",
-            "'Inter', system-ui, sans-serif",
-        ]
-        hero_gradient = hero_bg_variants[style_variant]
-        card_border_radius = ["20px", "16px", "24px"][style_variant]
+MANDATORY DESIGN RULES:
+1. Background MUST be pure black (#050505) or very dark (#0a0a0a). NO white backgrounds.
+2. Use the provided brand colors ONLY for gradients, glows, accents, and highlights. NEVER as solid section backgrounds.
+3. Use Inter font from Google Fonts (import it).
+4. Make it fully mobile-responsive with media queries.
+5. Create a UNIQUE layout — do NOT use the same section order every time. Be creative with the visual hierarchy.
+6. Hero section: Large gradient text heading, subtitle, and a prominent CTA button with glow effect.
+7. Include these sections (in any creative order): Hero, About/Services, Why Choose Us (use the strategies), Pricing Cards (use the tier data), Contact/CTA.
+8. Add smooth hover transitions on interactive elements.
+9. Use CSS-only decorative elements (gradients, borders, shadows) — NO external images or SVGs.
+10. The design must look like it was built by a premium agency — think Apple, Stripe, or Linear quality.
+11. All CTA buttons should link to #contact.
+12. Footer with copyright: © 2026 {biz_name}
 
-        html = f"""<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{biz_name}</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-<style>
-*{{margin:0;padding:0;box-sizing:border-box}}
-:root{{--p:{primary};--a:{accent};--bg:#050505;--surface:#111113;--surface2:#1a1a1f;--text:#f0f0f5;--muted:#888894;--border:#2a2a30}}
-body{{font-family:{font_variants[style_variant]};color:var(--text);background:var(--bg);line-height:1.7;-webkit-font-smoothing:antialiased}}
-a{{text-decoration:none;color:inherit}}
+Return ONLY the complete raw HTML. No markdown fences, no explanations."""
 
-nav{{display:flex;align-items:center;justify-content:space-between;padding:18px 6%;max-width:1200px;margin:0 auto}}
-.logo{{display:flex;align-items:center;gap:10px}}
-.logo-mark{{width:40px;height:40px;background:{gradients[style_variant]};border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:20px;color:#fff}}
-.logo-name{{font-size:20px;font-weight:800;letter-spacing:-0.5px}}
-.nav-cta{{background:var(--a);color:#000;padding:10px 22px;border-radius:10px;font-weight:700;font-size:13px;transition:opacity 0.2s}}
-.nav-cta:hover{{opacity:0.85}}
+        html = None
+        for attempt in range(2):
+            try:
+                lp_chat = LlmChat(api_key=emergent_key,
+                    session_id=f"lp_{user_id}_{hustle_id}_{uuid.uuid4().hex[:4]}",
+                    system_message="You are an elite web designer at a top agency. You build award-winning, unique landing pages. Each page you create has a completely different layout and visual personality. You write clean HTML/CSS. Return ONLY raw HTML — no markdown, no code fences, no explanations.")
+                lp_chat.with_model("openai", "gpt-5.2")
+                lp_response = await lp_chat.send_message(UserMessage(text=lp_prompt))
+                cleaned = lp_response.strip()
+                if cleaned.startswith("```"):
+                    cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+                if cleaned.endswith("```"):
+                    cleaned = cleaned[:-3]
+                cleaned = cleaned.strip()
+                if cleaned.startswith("<!") or cleaned.startswith("<html") or cleaned.startswith("<HTML"):
+                    html = cleaned
+                    break
+                else:
+                    import re as regex
+                    html_match = regex.search(r'<!DOCTYPE[\s\S]*</html>', cleaned, regex.IGNORECASE)
+                    if html_match:
+                        html = html_match.group()
+                        break
+                    logger.warning(f"LP attempt {attempt+1}: couldn't parse HTML from response")
+            except Exception as e:
+                logger.warning(f"LP attempt {attempt+1} error: {e}")
+                if attempt < 1:
+                    await asyncio.sleep(2)
 
-.hero{{padding:100px 6% 120px;text-align:center;position:relative;overflow:hidden}}
-.hero::before{{content:'';position:absolute;inset:0;background:{hero_gradient};pointer-events:none}}
-.hero-content{{position:relative;max-width:720px;margin:0 auto}}
-.hero h1{{font-size:clamp(36px,7vw,64px);font-weight:900;letter-spacing:-2.5px;line-height:1.05;margin-bottom:24px}}
-.hero h1 .accent{{background:{gradients[style_variant]};-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}}
-.hero p{{font-size:clamp(16px,2vw,20px);color:var(--muted);max-width:540px;margin:0 auto 40px;line-height:1.6}}
-.hero-cta{{display:inline-flex;align-items:center;gap:10px;background:var(--a);color:#000;font-weight:700;padding:16px 36px;border-radius:12px;font-size:17px;transition:all 0.2s;box-shadow:0 0 40px {accent}30}}
-.hero-cta:hover{{transform:translateY(-2px);box-shadow:0 0 60px {accent}50}}
-
-.section{{padding:80px 6%;max-width:960px;margin:0 auto}}
-.section-tag{{display:inline-block;background:{primary}15;color:var(--p);font-size:12px;font-weight:700;padding:6px 14px;border-radius:20px;margin-bottom:16px;text-transform:uppercase;letter-spacing:1px}}
-.section-title{{font-size:clamp(28px,4vw,40px);font-weight:900;letter-spacing:-1.5px;margin-bottom:12px}}
-.section-sub{{color:var(--muted);font-size:16px;max-width:600px;line-height:1.6}}
-.section-center{{text-align:center}}.section-center .section-sub{{margin:0 auto 40px}}
-
-.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:32px}}
-.card{{background:var(--surface);border:1px solid var(--border);border-radius:{card_border_radius};padding:28px;transition:all 0.25s}}
-.card:hover{{border-color:var(--a);transform:translateY(-3px)}}
-.card-icon{{font-size:32px;margin-bottom:14px}}
-.card h3{{font-size:17px;font-weight:700;margin-bottom:6px}}
-.card p{{color:var(--muted);font-size:14px;line-height:1.5}}
-
-.pricing{{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;align-items:start}}
-.price-card{{background:var(--surface);border:1px solid var(--border);border-radius:{card_border_radius};padding:32px;text-align:center;position:relative;transition:all 0.25s}}
-.price-card.featured{{border-color:var(--a);background:var(--surface2)}}
-.price-card.featured::before{{content:'POPULAR';position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:{gradients[style_variant]};color:#000;font-size:11px;font-weight:800;padding:4px 16px;border-radius:20px;letter-spacing:0.5px}}
-.price-card h3{{font-size:16px;font-weight:700;margin-bottom:6px;color:var(--muted)}}
-.price-amount{{font-size:40px;font-weight:900;margin-bottom:20px}}
-.price-amount .currency{{font-size:18px;vertical-align:super;margin-right:2px}}
-.price-card ul{{list-style:none;text-align:left;margin-bottom:28px}}
-.price-card li{{padding:8px 0;color:var(--muted);font-size:14px;border-bottom:1px solid var(--border)}}
-.price-card li::before{{content:'✓ ';color:var(--a);font-weight:700}}
-.price-btn{{display:block;padding:14px;border-radius:12px;font-weight:700;font-size:15px;border:2px solid var(--border);color:var(--text);transition:all 0.2s;cursor:pointer}}
-.price-btn:hover,.price-card.featured .price-btn{{background:var(--a);color:#000;border-color:var(--a)}}
-
-.cta-section{{background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:80px 6%;text-align:center}}
-.cta-section h2{{font-size:clamp(24px,4vw,36px);font-weight:900;letter-spacing:-1px;margin-bottom:12px}}
-.cta-section p{{color:var(--muted);margin-bottom:4px;font-size:16px}}
-.contact-email{{font-size:22px;font-weight:800;background:{gradients[style_variant]};-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}}
-
-footer{{padding:24px 6%;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted)}}
-@media(max-width:640px){{.pricing{{grid-template-columns:1fr}}nav{{padding:16px 5%}}footer{{flex-direction:column;text-align:center}}.hero{{padding:60px 5% 80px}}}}
-</style></head><body>
-
-<nav>
-<div class="logo"><div class="logo-mark">{logo_initial}</div><span class="logo-name">{biz_name}</span></div>
-<a href="#contact" class="nav-cta">Get Started</a>
-</nav>
-
-<section class="hero">
-<div class="hero-content">
-<h1><span class="accent">{tagline}</span></h1>
-<p>{pitch}</p>
-<a href="#contact" class="hero-cta">Get Started Today →</a>
-</div>
-</section>
-
-<section class="section">
-<span class="section-tag">What We Do</span>
-<h2 class="section-title">{hustle['description'][:100]}</h2>
-<p class="section-sub">{target}</p>
-</section>
-
-<section class="section section-center" style="background:var(--surface);border-radius:0;max-width:100%;padding:80px 6%">
-<span class="section-tag">Why Us</span>
-<h2 class="section-title">Built Different</h2>
-<p class="section-sub">What makes us the right choice</p>
-<div class="cards" style="max-width:960px;margin:32px auto 0">{benefits_html}</div>
-</section>
-
-<section class="section section-center" id="pricing">
-<span class="section-tag">Pricing</span>
-<h2 class="section-title">Simple, Transparent Pricing</h2>
-<p class="section-sub">Choose the package that fits your needs</p>
-<div class="pricing">{pricing_html if pricing_html else '<p style="text-align:center;color:var(--muted)">Contact us for custom pricing</p>'}</div>
-</section>
-
-<section class="cta-section" id="contact">
-<h2>Ready to Start?</h2>
-<p>Reach out and let's make it happen.</p>
-<p class="contact-email" style="margin-top:16px">{user_email}</p>
-{f'<p style="margin-top:8px;font-size:18px;font-weight:700;color:var(--a)">{user_phone}</p>' if user_phone else ''}
-<p style="margin-top:8px;color:var(--muted)">{user_name}</p>
-</section>
-
-<footer><span>&copy; 2026 {biz_name}</span><span style="opacity:0.5">Powered by HustleAI</span></footer>
-</body></html>"""
+        if not html:
+            html = f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{biz_name}</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet"><style>*{{margin:0;padding:0;box-sizing:border-box}}body{{font-family:'Inter',sans-serif;background:#050505;color:#f0f0f5;padding:80px 24px;text-align:center}}h1{{font-size:clamp(36px,8vw,56px);font-weight:900;margin-bottom:20px;background:linear-gradient(135deg,{primary},{accent});-webkit-background-clip:text;-webkit-text-fill-color:transparent}}p{{color:#888;font-size:18px;max-width:600px;margin:0 auto 36px;line-height:1.6}}a.cta{{display:inline-block;background:{accent};color:#000;padding:16px 40px;border-radius:14px;font-weight:700;font-size:17px;text-decoration:none;box-shadow:0 0 40px {accent}30}}.contact{{margin-top:80px;padding:60px 24px;background:#111;border-radius:20px;max-width:600px;margin-left:auto;margin-right:auto}}.contact h2{{font-size:28px;margin-bottom:12px}}.contact p{{color:{accent};font-weight:700;font-size:20px}}footer{{margin-top:60px;color:#555;font-size:13px}}</style></head><body><h1>{tagline}</h1><p>{pitch}</p><a class="cta" href="#contact">Get Started →</a><div class="contact" id="contact"><h2>Let's Connect</h2><p>{user_email}</p>{f'<p style="margin-top:8px">{user_phone}</p>' if user_phone else ''}</div><footer>© 2026 {biz_name}</footer></body></html>"""
 
         await db.launch_kits.update_one(
             {"kit_id": kit_id},

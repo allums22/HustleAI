@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   ActivityIndicator, RefreshControl,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
@@ -46,6 +46,13 @@ export default function DashboardScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Refresh data when tab gets focused (e.g., after promo redemption)
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const handleGenerateMore = async () => {
     setGenerating(true);
@@ -92,10 +99,10 @@ export default function DashboardScreen() {
           </View>
           <TouchableOpacity
             testID="upgrade-badge"
-            style={[styles.tierBadge, tier === 'pro' && styles.proBadge]}
+            style={[styles.tierBadge, (tier === 'pro' || tier === 'empire') && styles.proBadge]}
             onPress={() => router.push('/pricing')}
           >
-            <Ionicons name={tier === 'pro' ? 'diamond' : tier === 'starter' ? 'star' : 'flash'} size={14} color={tier === 'free' ? Colors.trustBlue : Colors.textOnColor} />
+            <Ionicons name={tier === 'empire' ? 'diamond' : tier === 'pro' ? 'diamond' : tier === 'starter' ? 'star' : 'flash'} size={14} color={tier === 'free' ? Colors.trustBlue : Colors.textOnColor} />
             <Text style={[styles.tierText, tier !== 'free' && styles.tierTextPro]}>{tierName}</Text>
           </TouchableOpacity>
         </View>
@@ -133,7 +140,7 @@ export default function DashboardScreen() {
             <Text style={[styles.statNumber, { color: Colors.orangeCTA }]}>
               {tier === 'pro' || tier === 'empire' ? '∞' : remainingPlans}
             </Text>
-            <Text style={styles.statLabel}>{tier === 'free' && !trialUsed ? 'Free Trial' : 'Remaining'}</Text>
+            <Text style={styles.statLabel}>{tier === 'empire' ? 'Unlimited' : tier === 'pro' ? 'Unlimited' : tier === 'free' && !trialUsed ? 'Free Trial' : 'Remaining'}</Text>
           </TouchableOpacity>
         </View>
 
