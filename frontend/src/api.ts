@@ -104,4 +104,8 @@ export const api = {
   // Profile
   getProfile: () => request('/api/profile'),
   getTiers: () => request('/api/subscription/tiers'),
+
+  // Promo Code
+  redeemPromo: (code: string) =>
+    request('/api/promo/redeem', { method: 'POST', body: JSON.stringify({ code }) }),
 };

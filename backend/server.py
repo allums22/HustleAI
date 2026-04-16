@@ -1127,6 +1127,31 @@ async def customize_landing_page(hustle_id: str, request: Request, user: dict = 
     )
     return {"status": "ok", "html": html}
 
+# ─── PROMO CODE (Beta Testing) ───
+BETA_PROMO_CODE = "HUSTLEVIP2025"
+
+class PromoRequest(BaseModel):
+    code: str
+
+@api_router.post("/promo/redeem")
+async def redeem_promo(req: PromoRequest, user: dict = Depends(get_current_user)):
+    code = req.code.strip().upper()
+    if code != BETA_PROMO_CODE:
+        raise HTTPException(status_code=400, detail="Invalid promo code")
+    # Check if already redeemed
+    existing = await db.promo_redemptions.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    if existing:
+        return {"status": "already_redeemed", "message": "You've already redeemed this code!", "tier": "empire"}
+    # Upgrade user to empire
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"subscription_tier": "empire"}})
+    await db.promo_redemptions.insert_one({
+        "user_id": user["user_id"],
+        "code": code,
+        "redeemed_at": datetime.now(timezone.utc).isoformat(),
+    })
+    logger.info(f"Beta promo redeemed by {user['user_id']} ({user.get('email', '')})")
+    return {"status": "success", "message": "Welcome to the beta! You now have full Empire access.", "tier": "empire"}
+
 # ─── AI MENTOR ───
 class MentorRequest(BaseModel):
     message: str

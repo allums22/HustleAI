@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Platform, Share } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Platform, Share, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,11 +9,14 @@ import { Colors } from '../../src/colors';
 import * as Clipboard from 'expo-clipboard';
 
 export default function ProfileScreen() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const router = useRouter();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [promoCode, setPromoCode] = useState('');
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoResult, setPromoResult] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   useEffect(() => { loadProfile(); }, []);
 
@@ -60,6 +63,23 @@ export default function ProfileScreen() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {}
+  };
+
+  const handleRedeemPromo = async () => {
+    if (!promoCode.trim()) return;
+    setPromoLoading(true);
+    setPromoResult(null);
+    try {
+      const res = await api.redeemPromo(promoCode.trim());
+      setPromoResult({ type: 'success', msg: res.message });
+      setPromoCode('');
+      await refreshUser();
+      loadProfile();
+    } catch (e: any) {
+      setPromoResult({ type: 'error', msg: e.message || 'Invalid promo code' });
+    } finally {
+      setPromoLoading(false);
+    }
   };
 
   if (loading) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={Colors.trustBlue} /></View>;
@@ -171,6 +191,49 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Beta Promo Code */}
+        <View style={styles.promoCard}>
+          <View style={styles.promoHeader}>
+            <View style={styles.promoBetaBadge}>
+              <Text style={styles.promoBetaText}>BETA</Text>
+            </View>
+            <Text style={styles.promoTitle}>Have a Promo Code?</Text>
+          </View>
+          <Text style={styles.promoDesc}>Enter your beta access code to unlock all premium features</Text>
+          <View style={styles.promoInputRow}>
+            <TextInput
+              testID="promo-code-input"
+              style={styles.promoInput}
+              placeholder="Enter code..."
+              placeholderTextColor={Colors.textTertiary}
+              value={promoCode}
+              onChangeText={setPromoCode}
+              autoCapitalize="characters"
+              returnKeyType="done"
+              onSubmitEditing={handleRedeemPromo}
+            />
+            <TouchableOpacity
+              testID="promo-redeem-btn"
+              style={[styles.promoRedeemBtn, (!promoCode.trim() || promoLoading) && { opacity: 0.5 }]}
+              onPress={handleRedeemPromo}
+              disabled={!promoCode.trim() || promoLoading}
+              activeOpacity={0.7}
+            >
+              {promoLoading ? (
+                <ActivityIndicator color="#000" size="small" />
+              ) : (
+                <Text style={styles.promoRedeemText}>Redeem</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+          {promoResult && (
+            <View style={[styles.promoResultBox, promoResult.type === 'success' ? styles.promoSuccess : styles.promoError]}>
+              <Ionicons name={promoResult.type === 'success' ? 'checkmark-circle' : 'alert-circle'} size={16} color={promoResult.type === 'success' ? Colors.growthGreenText : Colors.urgentRed} />
+              <Text style={[styles.promoResultText, promoResult.type === 'success' ? { color: Colors.growthGreenText } : { color: Colors.urgentRed }]}>{promoResult.msg}</Text>
+            </View>
+          )}
+        </View>
+
         <TouchableOpacity testID="logout-btn" style={styles.logoutBtn} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={18} color={Colors.urgentRed} />
           <Text style={styles.logoutText}>Logout</Text>
@@ -223,4 +286,19 @@ const styles = StyleSheet.create({
   menuText: { flex: 1, fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16, borderRadius: 12, borderWidth: 1, borderColor: Colors.urgentRedLight },
   logoutText: { fontSize: 15, fontWeight: '600', color: Colors.urgentRed },
+  // Promo Code
+  promoCard: { backgroundColor: Colors.surface, borderRadius: 14, padding: 18, borderWidth: 1.5, borderColor: Colors.gold + '30', marginBottom: 24, borderStyle: 'dashed' as any },
+  promoHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
+  promoBetaBadge: { backgroundColor: Colors.gold, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 6 },
+  promoBetaText: { fontSize: 10, fontWeight: '800', color: '#000', letterSpacing: 1 },
+  promoTitle: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary },
+  promoDesc: { fontSize: 13, color: Colors.textSecondary, lineHeight: 18, marginBottom: 14 },
+  promoInputRow: { flexDirection: 'row', gap: 10 },
+  promoInput: { flex: 1, backgroundColor: Colors.background, borderWidth: 1, borderColor: Colors.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, fontWeight: '700', color: Colors.textPrimary, letterSpacing: 2, textTransform: 'uppercase' as any },
+  promoRedeemBtn: { backgroundColor: Colors.gold, paddingHorizontal: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  promoRedeemText: { fontSize: 15, fontWeight: '700', color: '#000' },
+  promoResultBox: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, padding: 12, borderRadius: 10 },
+  promoSuccess: { backgroundColor: Colors.growthGreenLight },
+  promoError: { backgroundColor: Colors.urgentRedLight },
+  promoResultText: { fontSize: 13, fontWeight: '600', flex: 1 },
 });
