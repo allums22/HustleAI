@@ -85,6 +85,11 @@ export const api = {
   mentorChat: (hustleId: string, message: string) =>
     request(`/api/mentor/${hustleId}/chat`, { method: 'POST', body: JSON.stringify({ message }) }),
 
+  // AI Agents
+  getAgents: () => request('/api/agents'),
+  agentChat: (hustleId: string, message: string, agentId: string = 'mentor') =>
+    request(`/api/agents/${hustleId}/chat`, { method: 'POST', body: JSON.stringify({ message, agent_id: agentId }) }),
+
   // Landing Page Customization
   customizeLandingPage: (hustleId: string, data: { email?: string; phone?: string; name?: string; website?: string; instagram?: string; facebook?: string }) =>
     request(`/api/launch-kit/${hustleId}/customize`, { method: 'PUT', body: JSON.stringify(data) }),

@@ -274,10 +274,13 @@ Return ONLY JSON:
 
         # Save partial kit immediately so user sees progress
         kit_id = f"kit_{uuid.uuid4().hex[:12]}"
+        # Clean up AI-generated text (remove trailing periods from names/taglines)
+        clean_biz_name = kit_data.get("business_name", hustle['name']).rstrip(".")
+        clean_tagline = kit_data.get("tagline", "").rstrip(".")
         kit_doc = {
             "kit_id": kit_id, "hustle_id": hustle_id, "user_id": user_id,
-            "business_name": kit_data.get("business_name", hustle['name']),
-            "tagline": kit_data.get("tagline", ""),
+            "business_name": clean_biz_name,
+            "tagline": clean_tagline,
             "elevator_pitch": kit_data.get("elevator_pitch", ""),
             "social_posts": kit_data.get("social_posts", []),
             "brand_colors": kit_data.get("brand_colors", {}),
@@ -1023,6 +1026,118 @@ async def redeem_promo(req: PromoRequest, user: dict = Depends(get_current_user)
     })
     logger.info(f"Beta promo redeemed by {user['user_id']} ({user.get('email', '')})")
     return {"status": "success", "message": "Welcome to the beta! You now have full Empire access.", "tier": "empire"}
+
+# ─── AI AGENTS SYSTEM ───
+AI_AGENTS = {
+    "mentor": {
+        "name": "AI Mentor",
+        "icon": "sparkles",
+        "description": "Your personal business coach",
+        "color": "#E5A93E",
+        "min_tier": "starter",
+        "system_prefix": "You are an expert business mentor.",
+    },
+    "marketing": {
+        "name": "Marketing Agent",
+        "icon": "megaphone",
+        "description": "Social media, ads, and growth strategies",
+        "color": "#EC4899",
+        "min_tier": "pro",
+        "system_prefix": "You are a world-class digital marketing strategist specializing in small business growth.",
+    },
+    "content": {
+        "name": "Content Writer",
+        "icon": "create",
+        "description": "Blog posts, emails, and copy",
+        "color": "#8B5CF6",
+        "min_tier": "empire",
+        "system_prefix": "You are an expert content writer and copywriter who creates engaging, conversion-optimized content.",
+    },
+    "finance": {
+        "name": "Finance Advisor",
+        "icon": "calculator",
+        "description": "Pricing, projections, and budgets",
+        "color": "#22C55E",
+        "min_tier": "empire",
+        "system_prefix": "You are a financial advisor specializing in small business and side hustle economics.",
+    },
+}
+
+@api_router.get("/agents")
+async def get_agents(user: dict = Depends(get_current_user)):
+    tier = user.get("subscription_tier", "free")
+    tier_order = ["free", "starter", "pro", "empire"]
+    user_level = tier_order.index(tier) if tier in tier_order else 0
+    agents = []
+    for key, agent in AI_AGENTS.items():
+        min_level = tier_order.index(agent["min_tier"]) if agent["min_tier"] in tier_order else 4
+        agents.append({
+            "id": key,
+            "name": agent["name"],
+            "icon": agent["icon"],
+            "description": agent["description"],
+            "color": agent["color"],
+            "locked": user_level < min_level,
+            "min_tier": agent["min_tier"],
+        })
+    return {"agents": agents}
+
+class AgentChatRequest(BaseModel):
+    message: str
+    agent_id: str = "mentor"
+
+@api_router.post("/agents/{hustle_id}/chat")
+async def agent_chat(hustle_id: str, req: AgentChatRequest, user: dict = Depends(get_current_user)):
+    tier = user.get("subscription_tier", "free")
+    tier_order = ["free", "starter", "pro", "empire"]
+    user_level = tier_order.index(tier) if tier in tier_order else 0
+
+    agent = AI_AGENTS.get(req.agent_id)
+    if not agent:
+        raise HTTPException(status_code=400, detail="Unknown agent")
+
+    min_level = tier_order.index(agent["min_tier"]) if agent["min_tier"] in tier_order else 4
+    if user_level < min_level:
+        raise HTTPException(status_code=403, detail=f"{agent['name']} requires {agent['min_tier'].title()} plan or higher. Upgrade to unlock!")
+
+    message = req.message.strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Message required")
+
+    hustle = await db.side_hustles.find_one({"hustle_id": hustle_id, "user_id": user["user_id"]}, {"_id": 0})
+    if not hustle:
+        raise HTTPException(status_code=404, detail="Hustle not found")
+
+    plan = await db.business_plans.find_one({"hustle_id": hustle_id, "user_id": user["user_id"]}, {"_id": 0})
+    kit = await db.launch_kits.find_one({"hustle_id": hustle_id, "user_id": user["user_id"]}, {"_id": 0})
+
+    system = f"""{agent['system_prefix']}
+
+You are helping with: {hustle['name']} — {hustle.get('description', '')}
+Category: {hustle.get('category', '')}
+Potential income: {hustle.get('potential_income', '')}
+User's name: {user.get('name', '')}
+{'Business plan: ' + plan.get('overview', '')[:300] if plan else ''}
+{'Brand: ' + kit.get('business_name', '') + ' | Tagline: ' + kit.get('tagline', '') if kit else ''}
+
+Give specific, actionable advice. Be concise (2-3 paragraphs max). End with a specific action item.
+
+IMPORTANT: Write in plain conversational text. No asterisks, hashtags, backticks, or markdown. Use line breaks between paragraphs."""
+
+    try:
+        chat = LlmChat(api_key=emergent_key,
+            session_id=f"agent_{req.agent_id}_{user['user_id']}_{hustle_id}_{uuid.uuid4().hex[:4]}",
+            system_message=system)
+        chat.with_model("openai", "gpt-5.2")
+        response = await chat.send_message(UserMessage(text=message))
+        import re
+        clean = re.sub(r'\*{1,3}([^*]+)\*{1,3}', r'\1', response)
+        clean = re.sub(r'^#{1,6}\s*', '', clean, flags=re.MULTILINE)
+        clean = re.sub(r'`([^`]+)`', r'\1', clean)
+        return {"response": clean, "agent_id": req.agent_id, "agent_name": agent["name"]}
+    except Exception as e:
+        logger.error(f"Agent {req.agent_id} error: {e}")
+        raise HTTPException(status_code=500, detail="Agent is temporarily unavailable. Please try again.")
 
 # ─── AI MENTOR ───
 class MentorRequest(BaseModel):

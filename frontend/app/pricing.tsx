@@ -69,7 +69,15 @@ export default function PricingScreen() {
               </View>
               <View style={styles.headlineBadge}><Text style={styles.headlineText}>{plan.headline}</Text></View>
               <View style={styles.featuresList}>
-                {plan.features.map((f, i) => (<View key={i} style={styles.featureRow}><Ionicons name="checkmark-circle" size={16} color={Colors.growthGreen} /><Text style={styles.featureText}>{f}</Text></View>))}
+                {plan.features.map((f, i) => {
+                  const isAI = f.toLowerCase().includes('ai ') || f.toLowerCase().includes('agent');
+                  return (
+                    <View key={i} style={[styles.featureRow, isAI && styles.featureRowAI]}>
+                      <Ionicons name={isAI ? 'sparkles' : 'checkmark-circle'} size={16} color={isAI ? Colors.gold : Colors.growthGreen} />
+                      <Text style={[styles.featureText, isAI && styles.featureTextAI]}>{f}</Text>
+                    </View>
+                  );
+                })}
                 {plan.locked.map((f, i) => (<View key={`l-${i}`} style={styles.featureRow}><Ionicons name="lock-closed" size={16} color={Colors.textTertiary} /><Text style={styles.lockedText}>{f}</Text></View>))}
               </View>
               {isCurrent ? (<View style={styles.currentBadge}><Ionicons name="checkmark" size={16} color={Colors.growthGreen} /><Text style={styles.currentText}>Current Plan</Text></View>)
@@ -128,8 +136,10 @@ const styles = StyleSheet.create({
   headlineBadge: { backgroundColor: Colors.trustBlueLight, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, alignSelf: 'flex-start', marginBottom: 12 },
   headlineText: { fontSize: 13, fontWeight: '700', color: Colors.trustBlue },
   featuresList: { gap: 7, marginBottom: 14 },
-  featureRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  featureRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 },
+  featureRowAI: { backgroundColor: Colors.orangeLight, paddingHorizontal: 8, paddingVertical: 7, borderRadius: 8, marginVertical: 2 },
   featureText: { fontSize: 13, color: Colors.textPrimary },
+  featureTextAI: { color: Colors.gold, fontWeight: '700' },
   lockedText: { fontSize: 13, color: Colors.textTertiary, textDecorationLine: 'line-through' },
   currentBadge: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, borderRadius: 12, backgroundColor: Colors.growthGreenLight },
   currentText: { fontSize: 14, fontWeight: '700', color: Colors.growthGreen },

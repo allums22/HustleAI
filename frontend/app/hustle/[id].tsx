@@ -27,8 +27,15 @@ export default function HustleDetailScreen() {
   const [mentorHistory, setMentorHistory] = useState<{role: string; text: string}[]>([]);
   const [mentorLoading, setMentorLoading] = useState(false);
   const [showMentor, setShowMentor] = useState(false);
+  const [agents, setAgents] = useState<any[]>([]);
+  const [activeAgent, setActiveAgent] = useState('mentor');
 
   useEffect(() => { if (id) loadDetail(); }, [id]);
+  useEffect(() => { loadAgents(); }, []);
+
+  const loadAgents = async () => {
+    try { const res = await api.getAgents(); setAgents(res.agents || []); } catch {}
+  };
 
   // Auto-poll for landing page when kit exists but page is still generating
   useEffect(() => {
@@ -160,11 +167,11 @@ export default function HustleDetailScreen() {
     setMentorMsg('');
     setMentorLoading(true);
     try {
-      const res = await api.mentorChat(id!, msg);
+      const res = await api.agentChat(id!, msg, activeAgent);
       const aiMessage = { role: 'ai', text: res.response, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
       setMentorHistory(prev => [...prev, aiMessage]);
     } catch (e: any) {
-      if (e.message?.includes('Upgrade') || e.message?.includes('available on')) {
+      if (e.message?.includes('Upgrade') || e.message?.includes('requires')) {
         setMentorHistory(prev => [...prev, { role: 'system', text: e.message, time: '' }]);
       } else {
         setMentorHistory(prev => [...prev, { role: 'ai', text: 'Sorry, I had trouble responding. Please try again.', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
@@ -405,7 +412,7 @@ export default function HustleDetailScreen() {
         <View style={s.mentorFabPulse} />
       </TouchableOpacity>
 
-      {/* ═══════════ AI MENTOR CHAT MODAL ═══════════ */}
+      {/* ═══════════ AI AGENT HUB MODAL ═══════════ */}
       <Modal visible={showMentor} animationType="slide" transparent={false}>
         <SafeAreaView style={s.mentorSafe}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
@@ -415,16 +422,34 @@ export default function HustleDetailScreen() {
                 <Ionicons name="chevron-down" size={28} color={Colors.textPrimary} />
               </TouchableOpacity>
               <View style={s.mentorHeaderCenter}>
-                <View style={s.mentorAvatar}>
-                  <Ionicons name="sparkles" size={20} color="#0F172A" />
+                <View style={[s.mentorAvatar, { backgroundColor: agents.find(a => a.id === activeAgent)?.color || Colors.gold }]}>
+                  <Ionicons name={(agents.find(a => a.id === activeAgent)?.icon || 'sparkles') as any} size={20} color="#000" />
                 </View>
                 <View>
-                  <Text style={s.mentorHeaderTitle}>AI Mentor</Text>
-                  <Text style={s.mentorHeaderSub}>{hustle?.name || 'Your Hustle Coach'}</Text>
+                  <Text style={s.mentorHeaderTitle}>{agents.find(a => a.id === activeAgent)?.name || 'AI Mentor'}</Text>
+                  <Text style={s.mentorHeaderSub}>{hustle?.name || 'Your Hustle'}</Text>
                 </View>
               </View>
               <View style={{ width: 44 }} />
             </View>
+
+            {/* Agent Selector Tabs */}
+            {agents.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.agentTabs} contentContainerStyle={s.agentTabsContent}>
+                {agents.map(agent => (
+                  <TouchableOpacity
+                    key={agent.id}
+                    style={[s.agentTab, activeAgent === agent.id && { borderColor: agent.color, backgroundColor: agent.color + '15' }, agent.locked && s.agentTabLocked]}
+                    onPress={() => { if (!agent.locked) { setActiveAgent(agent.id); setMentorHistory([]); } }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name={agent.locked ? 'lock-closed' : agent.icon} size={14} color={agent.locked ? Colors.textTertiary : (activeAgent === agent.id ? agent.color : Colors.textSecondary)} />
+                    <Text style={[s.agentTabText, activeAgent === agent.id && { color: agent.color }, agent.locked && { color: Colors.textTertiary }]}>{agent.name}</Text>
+                    {agent.locked && <Text style={s.agentTabTier}>{agent.min_tier}</Text>}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
 
             {/* Chat Messages */}
             <FlatList
@@ -694,6 +719,13 @@ const s = StyleSheet.create({
   mentorAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: Colors.gold, justifyContent: 'center', alignItems: 'center' },
   mentorHeaderTitle: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary },
   mentorHeaderSub: { fontSize: 11, color: Colors.textSecondary, maxWidth: 200 },
+  // Agent Tabs
+  agentTabs: { borderBottomWidth: 1, borderBottomColor: Colors.border, maxHeight: 52 },
+  agentTabsContent: { paddingHorizontal: 12, paddingVertical: 8, gap: 8 },
+  agentTab: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: Colors.border, backgroundColor: Colors.surface },
+  agentTabLocked: { opacity: 0.5 },
+  agentTabText: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
+  agentTabTier: { fontSize: 9, fontWeight: '700', color: Colors.textTertiary, textTransform: 'uppercase' as any },
   mentorMessages: { paddingHorizontal: 16, paddingVertical: 12, paddingBottom: 8 },
   // ── Welcome ──
   mentorWelcome: { alignItems: 'center', paddingVertical: 32, gap: 12 },
