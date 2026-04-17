@@ -6,8 +6,8 @@ typography styles, and visual hierarchies.
 
 def get_template(variant: int, data: dict) -> str:
     """Return complete HTML for the given variant (0-4) with data injected."""
-    bn = data.get("biz_name", "Business")
-    tg = data.get("tagline", "Your tagline")
+    bn = data.get("biz_name", "Business").rstrip(".")
+    tg = data.get("tagline", "Your tagline").rstrip(".")
     pt = data.get("pitch", "Your elevator pitch goes here.")
     tgt = data.get("target", "")
     p = data.get("primary", "#6366F1")

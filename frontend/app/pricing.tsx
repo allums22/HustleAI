@@ -8,17 +8,17 @@ import { api } from '../src/api';
 import { Colors } from '../src/colors';
 
 const plans = [
-  { key: 'free', name: 'Free', price: '$0', period: 'forever', headline: 'Discover Starter Hustles',
-    features: ['3-5 starter side hustles', 'Revenue potential visible', '1 free trial business plan', 'Skills assessment'],
-    locked: ['Premium high-revenue hustles', 'Full business plans', 'Launch kits', 'AI mentor'], popular: false, icon: 'flash' },
-  { key: 'starter', name: 'Starter', price: '$9.99', period: '/month', headline: '10 Plans + 2 Launch Kits',
-    features: ['All starter + premium hustles', '10 business plans/month', '2 Hustle Launch Kits', 'Execution calendar', 'Priority AI'],
+  { key: 'free', name: 'Free', price: '$0', period: 'forever', headline: 'Discover Your Hustles',
+    features: ['Up to 12 side hustle recommendations', '1 free trial business plan', 'Community access', 'Skills assessment'],
+    locked: ['Premium business plans', 'Launch kits & landing pages', 'AI Mentor chat', 'AI Agents'], popular: false, icon: 'flash' },
+  { key: 'starter', name: 'Starter', price: '$9.99', period: '/month', headline: '10 Plans + AI Mentor',
+    features: ['All starter + premium hustles', '10 business plans/month', '2 Launch Kits with landing pages', 'AI Mentor — your personal business coach', '30-day execution calendar'],
     locked: [], popular: true, icon: 'star' },
-  { key: 'pro', name: 'Pro', price: '$29.99', period: '/month', headline: 'Unlimited Plans + 5 Kits',
-    features: ['Everything in Starter', 'Unlimited business plans', '5 Launch Kits/month', 'Advanced strategies', 'Premium support'],
+  { key: 'pro', name: 'Pro', price: '$29.99', period: '/month', headline: 'Unlimited + AI Agents',
+    features: ['Everything in Starter', 'Unlimited business plans', '5 Launch Kits/month', 'AI Mentor + Marketing Agent', 'Landing page customization', 'Advanced AI strategies'],
     locked: [], popular: false, icon: 'diamond' },
-  { key: 'empire', name: 'Empire', price: '$49.99', period: '/month', headline: 'Unlimited Everything',
-    features: ['Everything in Pro', 'Unlimited Launch Kits', 'Unlimited plan regeneration', 'White-glove AI strategies', 'Priority support', 'Ambassador badge'],
+  { key: 'empire', name: 'Empire', price: '$49.99', period: '/month', headline: 'Full AI Team',
+    features: ['Everything in Pro', 'Unlimited Launch Kits', 'All AI Agents (Marketing, Content, Finance)', 'AI Mentor with page editing', 'White-label landing pages', 'Dedicated support'],
     locked: [], popular: false, icon: 'trophy' },
 ];
 

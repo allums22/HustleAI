@@ -155,7 +155,7 @@ export default function LaunchPagePreview() {
       <View style={styles.actionBar}>
         <TouchableOpacity style={styles.editLinksBtn} onPress={() => setShowCustomize(true)} activeOpacity={0.7}>
           <Ionicons name="link-outline" size={16} color={Colors.gold} />
-          <Text style={styles.editLinksBtnText}>Edit Contact Info & Links</Text>
+          <Text style={styles.editLinksBtnText}>Edit Contact Info</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.downloadMainBtn}
@@ -173,6 +173,14 @@ export default function LaunchPagePreview() {
           <Ionicons name="download-outline" size={16} color="#0F172A" />
           <Text style={styles.downloadMainBtnText}>Download HTML</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* Instructions */}
+      <View style={styles.instructionsBar}>
+        <Ionicons name="bulb-outline" size={14} color={Colors.gold} />
+        <Text style={styles.instructionsText}>
+          Download the HTML file, then upload it to any hosting service (Netlify, Vercel, GoDaddy) to publish your landing page. Add your contact info first!
+        </Text>
       </View>
 
       {Platform.OS === 'web' ? (
@@ -349,6 +357,8 @@ const styles = StyleSheet.create({
   editLinksBtnText: { fontSize: 13, fontWeight: '700', color: Colors.gold },
   downloadMainBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, paddingHorizontal: 20, borderRadius: 10, backgroundColor: Colors.gold },
   downloadMainBtnText: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
+  instructionsBar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: Colors.orangeLight, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  instructionsText: { fontSize: 12, color: Colors.gold, flex: 1, lineHeight: 16 },
   iframeContainer: { flex: 1, margin: 8, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border },
   errorText: { fontSize: 16, color: Colors.textSecondary, textAlign: 'center' },
   retryBtn: { backgroundColor: Colors.gold, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 },

@@ -51,18 +51,22 @@ SUBSCRIPTION_TIERS = {
     "free": {
         "name": "Free", "plan_limit": 0, "launch_kit_limit": 0,
         "price": 0.00, "description": "Starter hustles + 1 trial business plan",
+        "features": ["Up to 12 hustle recommendations", "1 free trial business plan", "Community access"],
     },
     "starter": {
         "name": "Starter", "plan_limit": 10, "launch_kit_limit": 2,
-        "price": 9.99, "description": "10 plans/mo + 2 launch kits",
+        "price": 9.99, "description": "10 plans/mo + 2 kits + AI Mentor",
+        "features": ["10 business plans/month", "2 launch kits with landing pages", "AI Mentor chat", "Priority support"],
     },
     "pro": {
         "name": "Pro", "plan_limit": 999999, "launch_kit_limit": 5,
-        "price": 29.99, "description": "Unlimited plans + 5 launch kits",
+        "price": 29.99, "description": "Unlimited plans + 5 kits + AI Agents",
+        "features": ["Unlimited business plans", "5 launch kits", "AI Mentor + Marketing Agent", "Landing page customization"],
     },
     "empire": {
         "name": "Empire", "plan_limit": 999999, "launch_kit_limit": 999999,
-        "price": 49.99, "description": "Unlimited everything",
+        "price": 49.99, "description": "Unlimited everything + All AI Agents",
+        "features": ["Unlimited everything", "All AI Agents (Marketing, Content, Finance)", "AI Mentor with page editing", "White-label landing pages", "Dedicated support"],
     },
 }
 
@@ -955,67 +959,43 @@ async def customize_landing_page(hustle_id: str, request: Request, user: dict = 
     if not kit:
         raise HTTPException(status_code=404, detail="Launch kit not found")
     
-    html = kit.get("landing_page_html", "")
-    if not html:
-        raise HTTPException(status_code=400, detail="Landing page not generated yet")
-    
-    # Get the customization values
-    email = body.get("email", "")
+    email = body.get("email", "") or user.get("email", "")
     phone = body.get("phone", "")
-    name = body.get("name", "")
+    name = body.get("name", "") or user.get("name", "")
     website = body.get("website", "")
     instagram = body.get("instagram", "")
     facebook = body.get("facebook", "")
     
-    # Rebuild the contact section of the HTML
-    contact_links_html = ""
-    if website:
-        contact_links_html += f'<p style="margin-top:8px"><a href="{website}" style="color:var(--a);font-weight:700;font-size:16px" target="_blank">{website}</a></p>'
-    social_html = ""
-    if instagram:
-        social_html += f'<a href="https://instagram.com/{instagram.replace("@","")}" style="color:var(--a);font-weight:600;font-size:14px;margin-right:16px" target="_blank">Instagram: @{instagram.replace("@","")}</a>'
-    if facebook:
-        social_html += f'<a href="{facebook}" style="color:var(--a);font-weight:600;font-size:14px" target="_blank">Facebook</a>'
-    if social_html:
-        contact_links_html += f'<p style="margin-top:12px">{social_html}</p>'
-    
-    # Replace the contact section — find existing contact block
-    import re as regex
-    # Update email
-    if email:
-        html = regex.sub(r'<p class="contact-email">[^<]*</p>', f'<p class="contact-email">{email}</p>', html)
-    # Update phone — either replace existing or add after email
+    # Update user profile
+    profile_updates: Dict[str, Any] = {}
     if phone:
-        if regex.search(r'<p style="margin-top:4px;font-size:18px[^"]*">[^<]*</p>', html):
-            html = regex.sub(r'<p style="margin-top:4px;font-size:18px[^"]*">[^<]*</p>', f'<p style="margin-top:4px;font-size:18px;font-weight:600;color:var(--a)">{phone}</p>', html)
-        else:
-            html = html.replace('</p>\n<p style="margin-top:8px;color:var(--muted)">', f'</p>\n<p style="margin-top:4px;font-size:18px;font-weight:600;color:var(--a)">{phone}</p>\n<p style="margin-top:8px;color:var(--muted)">')
-    # Update name
-    if name:
-        html = regex.sub(r'<p style="margin-top:8px;color:var\(--muted\)">[^<]*</p>', f'<p style="margin-top:8px;color:var(--muted)">{name}</p>', html)
-    # Add social/website links before closing contact section  
-    if contact_links_html:
-        html = html.replace('</section>\n\n<footer>', f'{contact_links_html}</section>\n\n<footer>')
+        profile_updates["phone"] = phone
+    if name and name != user.get("name"):
+        profile_updates["name"] = name
+    if profile_updates:
+        await db.users.update_one({"user_id": user["user_id"]}, {"$set": profile_updates})
     
-    # Update user profile too
-    updates: Dict[str, Any] = {}
-    if phone:
-        updates["phone"] = phone
-    if name:
-        updates["name"] = name
-    if updates:
-        await db.users.update_one({"user_id": user["user_id"]}, {"$set": updates})
+    # Save custom links
+    custom_links = {"email": email, "phone": phone, "name": name, "website": website, "instagram": instagram, "facebook": facebook}
     
-    # Save customization data to kit for future edits
+    # Regenerate the landing page from template with updated contact info
+    hustle = await db.side_hustles.find_one({"hustle_id": hustle_id, "user_id": user["user_id"]}, {"_id": 0})
+    from templates import get_template
+    biz_name = kit.get("business_name", hustle.get("name", "") if hustle else "")
+    variant = hash(biz_name + (hustle.get('name', '') if hustle else '')) % 5
+    html = get_template(variant, {
+        "biz_name": biz_name, "tagline": kit.get("tagline", ""),
+        "pitch": kit.get("elevator_pitch", ""), "target": kit.get("target_audience", ""),
+        "primary": kit.get("brand_colors", {}).get("primary", "#6366F1"),
+        "accent": kit.get("brand_colors", {}).get("accent", "#EC4899"),
+        "email": email, "phone": phone, "name": name,
+        "strategies": kit.get("marketing_strategy", []),
+        "pricing_tiers": kit.get("pricing_tiers", []),
+    })
+    
     await db.launch_kits.update_one(
         {"hustle_id": hustle_id, "user_id": user["user_id"]},
-        {"$set": {
-            "landing_page_html": html,
-            "custom_links": {
-                "email": email, "phone": phone, "name": name,
-                "website": website, "instagram": instagram, "facebook": facebook
-            }
-        }}
+        {"$set": {"landing_page_html": html, "custom_links": custom_links}}
     )
     return {"status": "ok", "html": html}
 
@@ -1070,7 +1050,9 @@ User's name: {user.get('name', '')}
 {'User skills: ' + str(qr.get('answers', {}).get('skills', '')) if qr else ''}
 {'Blue collar skills: ' + str(qr.get('answers', {}).get('blue_collar', '')) if qr else ''}
 
-You are a hands-on, experienced mentor. Give specific, actionable advice. Be encouraging but realistic. If asked about pricing, give specific numbers. If asked about finding clients, give specific strategies. Keep responses concise (2-3 paragraphs max). End with a specific action item the user should do TODAY."""
+You are a hands-on, experienced mentor. Give specific, actionable advice. Be encouraging but realistic. If asked about pricing, give specific numbers. If asked about finding clients, give specific strategies. Keep responses concise (2-3 paragraphs max). End with a specific action item the user should do TODAY.
+
+IMPORTANT: Do NOT use any markdown formatting. No asterisks, no hashtags, no backticks, no bullet points with dashes. Write in plain conversational text only. Use line breaks between paragraphs."""
 
     try:
         chat = LlmChat(api_key=emergent_key,
@@ -1078,7 +1060,12 @@ You are a hands-on, experienced mentor. Give specific, actionable advice. Be enc
             system_message=system)
         chat.with_model("openai", "gpt-5.2")
         response = await chat.send_message(UserMessage(text=message))
-        return {"response": response}
+        # Strip markdown formatting (asterisks, hashtags) for clean display
+        import re
+        clean = re.sub(r'\*{1,3}([^*]+)\*{1,3}', r'\1', response)  # Remove bold/italic markers
+        clean = re.sub(r'^#{1,6}\s*', '', clean, flags=re.MULTILINE)  # Remove heading markers
+        clean = re.sub(r'`([^`]+)`', r'\1', clean)  # Remove inline code markers
+        return {"response": clean}
     except Exception as e:
         logger.error(f"Mentor error: {e}")
         raise HTTPException(status_code=500, detail="Mentor is temporarily unavailable. Try again.")
