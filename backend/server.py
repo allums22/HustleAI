@@ -290,86 +290,31 @@ Return ONLY JSON:
         # Mark job complete so user sees stage 1 results immediately
         await db.generation_jobs.update_one({"job_id": job_id}, {"$set": {"status": "complete"}})
 
-        # ── Stage 2: AI-Generated Custom Landing Page ──
+        # ── Stage 2: Premium Landing Page (5 unique template variants) ──
+        from templates import get_template
         biz_name = kit_data.get("business_name", hustle['name'])
-        primary = kit_data.get("brand_colors", {}).get("primary", "#2563EB")
-        accent = kit_data.get("brand_colors", {}).get("accent", "#F59E0B")
+        primary = kit_data.get("brand_colors", {}).get("primary", "#6366F1")
+        accent = kit_data.get("brand_colors", {}).get("accent", "#EC4899")
         tagline = kit_data.get("tagline", hustle['name'])
         pitch = kit_data.get("elevator_pitch", hustle['description'])
         target = kit_data.get("target_audience", "")
         strategies = kit_data.get("marketing_strategy", [])
         pricing_tiers = kit_data.get("pricing_tiers", [])
 
-        # Get user contact info
         user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0, "email": 1, "name": 1, "phone": 1})
         user_email = user_doc.get("email", "") if user_doc else ""
         user_name = user_doc.get("name", "") if user_doc else ""
         user_phone = user_doc.get("phone", "") if user_doc else ""
 
-        pricing_json = json.dumps(pricing_tiers[:3]) if pricing_tiers else "[]"
-        strategies_json = json.dumps(strategies[:3]) if strategies else "[]"
+        # Pick template variant based on hustle name hash (deterministic but varied)
+        variant = hash(biz_name + hustle['name']) % 5
 
-        lp_prompt = f"""Build a complete, production-ready, single-page landing page in HTML/CSS for this business:
-
-BUSINESS NAME: {biz_name}
-TAGLINE: {tagline}
-ELEVATOR PITCH: {pitch}
-TARGET AUDIENCE: {target}
-CATEGORY: {hustle.get('category', 'General')}
-BRAND COLORS: Primary {primary}, Accent {accent}
-CONTACT EMAIL: {user_email}
-CONTACT PHONE: {user_phone}
-CONTACT NAME: {user_name}
-MARKETING STRATEGIES: {strategies_json}
-PRICING TIERS: {pricing_json}
-
-MANDATORY DESIGN RULES:
-1. Background MUST be pure black (#050505) or very dark (#0a0a0a). NO white backgrounds.
-2. Use the provided brand colors ONLY for gradients, glows, accents, and highlights. NEVER as solid section backgrounds.
-3. Use Inter font from Google Fonts (import it).
-4. Make it fully mobile-responsive with media queries.
-5. Create a UNIQUE layout — do NOT use the same section order every time. Be creative with the visual hierarchy.
-6. Hero section: Large gradient text heading, subtitle, and a prominent CTA button with glow effect.
-7. Include these sections (in any creative order): Hero, About/Services, Why Choose Us (use the strategies), Pricing Cards (use the tier data), Contact/CTA.
-8. Add smooth hover transitions on interactive elements.
-9. Use CSS-only decorative elements (gradients, borders, shadows) — NO external images or SVGs.
-10. The design must look like it was built by a premium agency — think Apple, Stripe, or Linear quality.
-11. All CTA buttons should link to #contact.
-12. Footer with copyright: © 2026 {biz_name}
-
-Return ONLY the complete raw HTML. No markdown fences, no explanations."""
-
-        html = None
-        for attempt in range(2):
-            try:
-                lp_chat = LlmChat(api_key=emergent_key,
-                    session_id=f"lp_{user_id}_{hustle_id}_{uuid.uuid4().hex[:4]}",
-                    system_message="You are an elite web designer at a top agency. You build award-winning, unique landing pages. Each page you create has a completely different layout and visual personality. You write clean HTML/CSS. Return ONLY raw HTML — no markdown, no code fences, no explanations.")
-                lp_chat.with_model("openai", "gpt-5.2")
-                lp_response = await lp_chat.send_message(UserMessage(text=lp_prompt))
-                cleaned = lp_response.strip()
-                if cleaned.startswith("```"):
-                    cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-                if cleaned.endswith("```"):
-                    cleaned = cleaned[:-3]
-                cleaned = cleaned.strip()
-                if cleaned.startswith("<!") or cleaned.startswith("<html") or cleaned.startswith("<HTML"):
-                    html = cleaned
-                    break
-                else:
-                    import re as regex
-                    html_match = regex.search(r'<!DOCTYPE[\s\S]*</html>', cleaned, regex.IGNORECASE)
-                    if html_match:
-                        html = html_match.group()
-                        break
-                    logger.warning(f"LP attempt {attempt+1}: couldn't parse HTML from response")
-            except Exception as e:
-                logger.warning(f"LP attempt {attempt+1} error: {e}")
-                if attempt < 1:
-                    await asyncio.sleep(2)
-
-        if not html:
-            html = f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{biz_name}</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet"><style>*{{margin:0;padding:0;box-sizing:border-box}}body{{font-family:'Inter',sans-serif;background:#050505;color:#f0f0f5;padding:80px 24px;text-align:center}}h1{{font-size:clamp(36px,8vw,56px);font-weight:900;margin-bottom:20px;background:linear-gradient(135deg,{primary},{accent});-webkit-background-clip:text;-webkit-text-fill-color:transparent}}p{{color:#888;font-size:18px;max-width:600px;margin:0 auto 36px;line-height:1.6}}a.cta{{display:inline-block;background:{accent};color:#000;padding:16px 40px;border-radius:14px;font-weight:700;font-size:17px;text-decoration:none;box-shadow:0 0 40px {accent}30}}.contact{{margin-top:80px;padding:60px 24px;background:#111;border-radius:20px;max-width:600px;margin-left:auto;margin-right:auto}}.contact h2{{font-size:28px;margin-bottom:12px}}.contact p{{color:{accent};font-weight:700;font-size:20px}}footer{{margin-top:60px;color:#555;font-size:13px}}</style></head><body><h1>{tagline}</h1><p>{pitch}</p><a class="cta" href="#contact">Get Started →</a><div class="contact" id="contact"><h2>Let's Connect</h2><p>{user_email}</p>{f'<p style="margin-top:8px">{user_phone}</p>' if user_phone else ''}</div><footer>© 2026 {biz_name}</footer></body></html>"""
+        html = get_template(variant, {
+            "biz_name": biz_name, "tagline": tagline, "pitch": pitch,
+            "target": target, "primary": primary, "accent": accent,
+            "email": user_email, "phone": user_phone, "name": user_name,
+            "strategies": strategies, "pricing_tiers": pricing_tiers,
+        })
 
         await db.launch_kits.update_one(
             {"kit_id": kit_id},
@@ -783,8 +728,33 @@ async def generate_launch_kit(hustle_id: str, user: dict = Depends(get_current_u
     if not hustle:
         raise HTTPException(status_code=404, detail="Hustle not found")
     existing = await db.launch_kits.find_one({"hustle_id": hustle_id, "user_id": user["user_id"]}, {"_id": 0})
-    if existing:
+    if existing and existing.get("landing_page_html"):
         return {"kit": existing, "status": "complete"}
+    # If kit exists but LP is missing, regenerate LP only
+    if existing and not existing.get("landing_page_html"):
+        try:
+            from templates import get_template
+            biz_name = existing.get("business_name", hustle.get("name", ""))
+            variant = hash(biz_name + hustle.get('name', '')) % 5
+            html = get_template(variant, {
+                "biz_name": biz_name, "tagline": existing.get("tagline", ""),
+                "pitch": existing.get("elevator_pitch", ""), "target": existing.get("target_audience", ""),
+                "primary": existing.get("brand_colors", {}).get("primary", "#6366F1"),
+                "accent": existing.get("brand_colors", {}).get("accent", "#EC4899"),
+                "email": user.get("email", ""), "phone": user.get("phone", ""),
+                "name": user.get("name", ""),
+                "strategies": existing.get("marketing_strategy", []),
+                "pricing_tiers": existing.get("pricing_tiers", []),
+            })
+            await db.launch_kits.update_one(
+                {"hustle_id": hustle_id, "user_id": user["user_id"]},
+                {"$set": {"landing_page_html": html, "landing_page_status": "complete"}}
+            )
+            existing["landing_page_html"] = html
+            existing["landing_page_status"] = "complete"
+            return {"kit": existing, "status": "complete"}
+        except Exception as e:
+            logger.error(f"LP regen error: {e}")
     # Access check
     tier = user.get("subscription_tier", "free")
     kits_gen = user.get("launch_kits_generated", 0)
