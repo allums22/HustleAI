@@ -122,7 +122,7 @@ footer{{padding:24px 6%;display:flex;justify-content:space-between;font-size:12p
 <section class="sec"><span class="tag">Our Approach</span><h2 class="sh">Why {bn}</h2><p style="color:#777;margin-bottom:24px">{tgt}</p>{strat_html}</section>
 <section class="sec" style="text-align:center"><span class="tag">Investment</span><h2 class="sh">Pricing</h2><div class="pg">{pricing_html}</div></section>
 <section id="cta"><h2>Ready to Get Started?</h2><p style="color:#666">Let's make it happen</p>{contact}</section>
-<footer><span>© 2026 {bn}</span><span style="opacity:.4">Powered by HustleAI</span></footer></body></html>""",
+<footer><span>© 2026 {bn}</span><span style="opacity:.4">hustleai.live</span></footer></body></html>""",
 
         # ═══ V1: SPLIT HERO — Left text, right glowing orb animation ═══
         f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{bn}</title>
@@ -164,7 +164,7 @@ footer{{padding:20px 5%;display:flex;justify-content:space-between;font-size:12p
 <section class="sec"><span class="tag">Services</span><h2 class="sh">What We Offer</h2><p style="color:#777;margin-bottom:20px">{tgt}</p><div class="g2">{''.join(f'<div class="gc"><h4>{s[:50]}</h4><p>{s[50:]}</p></div>' for s in strats)}</div></section>
 <section class="sec" style="text-align:center"><span class="tag">Pricing</span><h2 class="sh">Choose Your Plan</h2><div class="pg">{pricing_html}</div></section>
 <section id="cta"><h2>Let's Build Together</h2><p style="color:#666">Get in touch today</p>{contact}</section>
-<footer><span>© 2026 {bn}</span><span style="opacity:.4">Powered by HustleAI</span></footer></body></html>""",
+<footer><span>© 2026 {bn}</span><span style="opacity:.4">hustleai.live</span></footer></body></html>""",
 
         # ═══ V2: MINIMAL ACCENT LINE — Clean, whitespace-heavy, numbered strategies ═══
         f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{bn}</title>
@@ -202,7 +202,7 @@ footer{{padding:20px 6%;text-align:center;font-size:11px;color:#333;border-top:1
 <section class="sec"><p style="color:#777;margin-bottom:24px">{tgt}</p>{''.join(f'<div class="dl"><div class="dl-n">{str(i+1).zfill(2)}</div><div><h4>{s[:60]}</h4><p>{s[60:]}</p></div></div>' for i,s in enumerate(strats))}</section>
 <section class="sec" style="text-align:center"><h2 style="font-size:clamp(24px,4vw,34px);font-weight:900;letter-spacing:-1px;margin-bottom:24px">Our Packages</h2><div class="pg">{pricing_html}</div></section>
 <section id="cta"><h2>Ready to Start?</h2><p style="color:#666">Let's work together</p>{contact}</section>
-<footer>© 2026 {bn} · Powered by HustleAI</footer></body></html>""",
+<footer>© 2026 {bn} · hustleai.live</footer></body></html>""",
 
         # ═══ V3: LUXURY HORIZONTAL — Side-scrolling cards, metric band, elegant contact ═══
         f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{bn}</title>
@@ -245,7 +245,7 @@ footer{{padding:20px 5%;display:flex;justify-content:space-between;font-size:11p
 <section class="sec"><h2 class="sh">How We Help</h2><p style="color:#666;margin-bottom:24px">{tgt}</p><div class="hz">{''.join(f"<div class=hc><h4>Step {i+1}</h4><p>{s}</p></div>" for i,s in enumerate(strats))}</div></section>
 <section class="sec" style="text-align:center"><h2 class="sh">Investment</h2><div class="pg">{pricing_html}</div></section>
 <section id="cta"><h2>Let's Connect</h2><p style="color:#555">Ready when you are</p>{contact}</section>
-<footer><span>© 2026 {bn}</span><span style="opacity:.4">Powered by HustleAI</span></footer></body></html>""",
+<footer><span>© 2026 {bn}</span><span style="opacity:.4">hustleai.live</span></footer></body></html>""",
 
         # ═══ V4: GEOMETRIC BLOCKS — Split grid hero, angular sections, bold borders ═══
         f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{bn}</title>
@@ -287,7 +287,7 @@ footer{{padding:16px 5%;display:flex;justify-content:space-between;font-size:11p
 <section class="sec"><span class="tag2">About</span><h2 class="sh">What We Do</h2><p style="color:#777;line-height:1.7">{tgt}</p></section>
 <section class="sec" style="text-align:center"><span class="tag2">Pricing</span><h2 class="sh">Our Packages</h2><div class="pg">{pricing_html}</div></section>
 <section id="cta"><h2>Start Your Journey</h2><p style="color:#555">We're ready when you are</p>{contact}</section>
-<footer><span>© 2026 {bn}</span><span style="opacity:.4">HustleAI</span></footer></body></html>""",
+<footer><span>© 2026 {bn}</span><span style="opacity:.4">hustleai.live</span></footer></body></html>""",
     ]
 
     return templates[variant % len(templates)]

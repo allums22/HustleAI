@@ -1008,6 +1008,40 @@ async def customize_landing_page(hustle_id: str, request: Request, user: dict = 
     )
     return {"status": "ok", "html": html}
 
+# ─── BETA NDA & FEEDBACK ───
+@api_router.post("/beta/accept-nda")
+async def accept_nda(user: dict = Depends(get_current_user)):
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"nda_accepted": True, "nda_accepted_at": datetime.now(timezone.utc).isoformat()}})
+    return {"status": "ok"}
+
+@api_router.get("/beta/nda-status")
+async def nda_status(user: dict = Depends(get_current_user)):
+    return {"accepted": bool(user.get("nda_accepted", False))}
+
+class FeedbackRequest(BaseModel):
+    category: str = "general"
+    rating: int = 5
+    message: str
+
+@api_router.post("/beta/feedback")
+async def submit_feedback(req: FeedbackRequest, user: dict = Depends(get_current_user)):
+    feedback = {
+        "user_id": user["user_id"],
+        "email": user.get("email", ""),
+        "name": user.get("name", ""),
+        "category": req.category,
+        "rating": req.rating,
+        "message": req.message,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.beta_feedback.insert_one(feedback)
+    return {"status": "ok"}
+
+@api_router.get("/beta/feedback")
+async def get_feedback(user: dict = Depends(get_current_user)):
+    feedbacks = await db.beta_feedback.find({"user_id": user["user_id"]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return {"feedbacks": feedbacks}
+
 # ─── PROMO CODE (Beta Testing) ───
 BETA_PROMO_CODE = "HUSTLEVIP2025"
 

@@ -234,6 +234,18 @@ export default function ProfileScreen() {
           )}
         </View>
 
+        {/* Beta Feedback */}
+        <TouchableOpacity style={styles.feedbackBtn} onPress={() => router.push('/feedback')} activeOpacity={0.7}>
+          <View style={styles.feedbackIcon}>
+            <Ionicons name="chatbubble-ellipses" size={20} color={Colors.gold} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.feedbackTitle}>Beta Feedback</Text>
+            <Text style={styles.feedbackSub}>Share your experience & suggestions</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
+        </TouchableOpacity>
+
         <TouchableOpacity testID="logout-btn" style={styles.logoutBtn} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={18} color={Colors.urgentRed} />
           <Text style={styles.logoutText}>Logout</Text>
@@ -301,4 +313,9 @@ const styles = StyleSheet.create({
   promoSuccess: { backgroundColor: Colors.growthGreenLight },
   promoError: { backgroundColor: Colors.urgentRedLight },
   promoResultText: { fontSize: 13, fontWeight: '600', flex: 1 },
+  // Feedback
+  feedbackBtn: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: Colors.surface, borderRadius: 14, padding: 16, borderWidth: 1.5, borderColor: Colors.gold + '30', marginBottom: 16 },
+  feedbackIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.orangeLight, justifyContent: 'center', alignItems: 'center' },
+  feedbackTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
+  feedbackSub: { fontSize: 12, color: Colors.textTertiary, marginTop: 2 },
 });

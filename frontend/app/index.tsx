@@ -91,6 +91,8 @@ export default function LandingPage() {
             </View>
           ))}
         </View>
+
+        <Text style={styles.domainBranding}>hustleai.live</Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -132,7 +134,5 @@ const styles = StyleSheet.create({
   trustSection: { gap: 8, alignItems: 'center', marginBottom: 20 },
   trustRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   trustText: { fontSize: 13, color: Colors.textSecondary },
-  testimonialCard: { backgroundColor: Colors.surface, borderRadius: 14, padding: 20, borderWidth: 1, borderColor: Colors.border, gap: 10 },
-  testimonialText: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20, fontStyle: 'italic' },
-  testimonialAuthor: { fontSize: 12, fontWeight: '600', color: Colors.gold },
+  domainBranding: { fontSize: 12, color: Colors.textTertiary, textAlign: 'center', letterSpacing: 1, marginTop: 20, marginBottom: 8 },
 });

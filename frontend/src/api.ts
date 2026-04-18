@@ -115,4 +115,11 @@ export const api = {
   // Promo Code
   redeemPromo: (code: string) =>
     request('/api/promo/redeem', { method: 'POST', body: JSON.stringify({ code }) }),
+
+  // Beta
+  getNdaStatus: () => request('/api/beta/nda-status'),
+  acceptNda: () => request('/api/beta/accept-nda', { method: 'POST' }),
+  submitFeedback: (data: { category: string; rating: number; message: string }) =>
+    request('/api/beta/feedback', { method: 'POST', body: JSON.stringify(data) }),
+  getFeedback: () => request('/api/beta/feedback'),
 };

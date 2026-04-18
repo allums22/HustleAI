@@ -29,6 +29,11 @@ export default function DashboardScreen() {
       ]);
       setProfile(profileRes);
       setHustles(hustlesRes.hustles || []);
+      // Beta NDA check
+      try {
+        const ndaRes = await api.getNdaStatus();
+        if (!ndaRes.accepted) { router.replace('/nda'); return; }
+      } catch {}
       // Load motivation & streak
       try {
         const [motRes, streakRes] = await Promise.all([api.getDailyMotivation(), api.getStreak()]);
