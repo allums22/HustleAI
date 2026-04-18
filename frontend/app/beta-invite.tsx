@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,61 @@ import { Colors } from '../src/colors';
 
 export default function BetaInviteScreen() {
   const router = useRouter();
+  const [inviteCode, setInviteCode] = useState('');
+  const [codeAccepted, setCodeAccepted] = useState(false);
+  const [codeError, setCodeError] = useState(false);
+
+  const BETA_CODE = 'HUSTLEVIP2025';
+
+  const handleVerifyCode = () => {
+    if (inviteCode.trim().toUpperCase() === BETA_CODE) {
+      setCodeAccepted(true);
+      setCodeError(false);
+    } else {
+      setCodeError(true);
+    }
+  };
+
+  if (!codeAccepted) {
+    return (
+      <SafeAreaView style={s.safe}>
+        <ScrollView contentContainerStyle={s.gateScroll}>
+          <View style={s.gateCard}>
+            <View style={s.logoRow}>
+              <View style={s.logoDot} />
+              <Text style={s.logoText}>HustleAI</Text>
+            </View>
+            <View style={s.gateLock}>
+              <Ionicons name="shield-checkmark" size={36} color={Colors.gold} />
+            </View>
+            <Text style={s.gateTitle}>Beta Access Required</Text>
+            <Text style={s.gateSub}>Enter your invite code to access the HustleAI beta program</Text>
+            <TextInput
+              style={s.gateInput}
+              placeholder="Enter invite code"
+              placeholderTextColor={Colors.textTertiary}
+              value={inviteCode}
+              onChangeText={(t) => { setInviteCode(t); setCodeError(false); }}
+              autoCapitalize="characters"
+              onSubmitEditing={handleVerifyCode}
+            />
+            {codeError && (
+              <View style={s.gateError}>
+                <Ionicons name="alert-circle" size={14} color={Colors.urgentRed} />
+                <Text style={s.gateErrorText}>Invalid invite code</Text>
+              </View>
+            )}
+            <TouchableOpacity style={[s.gateCta, !inviteCode.trim() && { opacity: 0.4 }]} onPress={handleVerifyCode} disabled={!inviteCode.trim()} activeOpacity={0.85}>
+              <Text style={s.gateCtaText}>Verify & Continue</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/')} style={{ marginTop: 16 }}>
+              <Text style={s.gateBack}>← Back to Homepage</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={s.safe}>
@@ -127,4 +182,16 @@ const s = StyleSheet.create({
   ctaBtnText: { fontSize: 16, fontWeight: '700', color: '#000' },
   loginLink: { alignItems: 'center', marginTop: 16 },
   loginLinkText: { fontSize: 14, color: Colors.textTertiary },
+  // Gate
+  gateScroll: { flex: 1, justifyContent: 'center', padding: 24 },
+  gateCard: { backgroundColor: Colors.surface, borderRadius: 20, padding: 32, alignItems: 'center', borderWidth: 1, borderColor: Colors.border },
+  gateLock: { marginVertical: 20 },
+  gateTitle: { fontSize: 22, fontWeight: '900', color: Colors.textPrimary, marginBottom: 8 },
+  gateSub: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  gateInput: { width: '100%', backgroundColor: Colors.background, borderWidth: 1, borderColor: Colors.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 16, fontSize: 18, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center', letterSpacing: 3 },
+  gateError: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
+  gateErrorText: { fontSize: 13, color: Colors.urgentRed },
+  gateCta: { width: '100%', backgroundColor: Colors.gold, paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginTop: 20 },
+  gateCtaText: { fontSize: 16, fontWeight: '700', color: '#000' },
+  gateBack: { fontSize: 13, color: Colors.textTertiary },
 });
