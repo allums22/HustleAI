@@ -104,6 +104,12 @@ export default function PricingScreen() {
               <Text style={styles.alacartePrice}>$2.99</Text>
               <Text style={styles.alacartePer}>each</Text>
             </View>
+            <View style={styles.alacarteCard}>
+              <Ionicons name="sparkles" size={22} color={Colors.orangeCTA} />
+              <Text style={styles.alacarteTitle}>AI Agent</Text>
+              <Text style={styles.alacartePrice}>$4.99</Text>
+              <Text style={styles.alacartePer}>/mo each</Text>
+            </View>
           </View>
         </View>
         <View style={styles.guaranteeRow}><Ionicons name="shield-checkmark" size={18} color={Colors.growthGreen} /><Text style={styles.guaranteeText}>Secure checkout via Stripe</Text></View>

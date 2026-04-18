@@ -72,6 +72,11 @@ SUBSCRIPTION_TIERS = {
 
 ALACARTE_PLAN_PRICE = 4.99
 ALACARTE_KIT_PRICE = 2.99
+ALACARTE_AGENT_PRICES = {
+    "marketing": {"price": 4.99, "name": "Marketing Agent"},
+    "content": {"price": 4.99, "name": "Content Writer"},
+    "finance": {"price": 4.99, "name": "Finance Advisor"},
+}
 REFERRAL_CREDIT = 5.00
 
 # ─── Questionnaire Questions ───
@@ -1099,17 +1104,21 @@ async def get_agents(user: dict = Depends(get_current_user)):
     agents = []
     for key, agent in AI_AGENTS.items():
         min_level = tier_order.index(agent["min_tier"]) if agent["min_tier"] in tier_order else 4
+        # Check a la carte purchase
+        alacarte_purchased = (user.get("alacarte_agents") or [])
+        has_access = user_level >= min_level or key in alacarte_purchased or key == "mentor"
         agents.append({
             "id": key,
             "name": agent["name"],
             "icon": agent["icon"],
             "description": agent["description"],
             "color": agent["color"],
-            "locked": user_level < min_level,
+            "locked": not has_access,
             "min_tier": agent["min_tier"],
             "prompts": agent.get("prompts", []),
+            "alacarte_price": ALACARTE_AGENT_PRICES.get(key, {}).get("price"),
         })
-    return {"agents": agents}
+    return {"agents": agents, "alacarte_prices": ALACARTE_AGENT_PRICES}
 
 # Save agent conversation to DB after each message
 async def _save_agent_message(user_id: str, hustle_id: str, agent_id: str, role: str, text: str):
@@ -1142,8 +1151,11 @@ async def agent_chat(hustle_id: str, req: AgentChatRequest, user: dict = Depends
         raise HTTPException(status_code=400, detail="Unknown agent")
 
     min_level = tier_order.index(agent["min_tier"]) if agent["min_tier"] in tier_order else 4
-    if user_level < min_level:
-        raise HTTPException(status_code=403, detail=f"{agent['name']} requires {agent['min_tier'].title()} plan or higher. Upgrade to unlock!")
+    alacarte_purchased = (user.get("alacarte_agents") or [])
+    has_access = user_level >= min_level or req.agent_id in alacarte_purchased or req.agent_id == "mentor"
+    if not has_access:
+        price = ALACARTE_AGENT_PRICES.get(req.agent_id, {}).get("price", 4.99)
+        raise HTTPException(status_code=403, detail=f"{agent['name']} requires {agent['min_tier'].title()} plan or higher. Or purchase a la carte for ${price}/mo!")
 
     message = req.message.strip()
     if not message:

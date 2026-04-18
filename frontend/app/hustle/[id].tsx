@@ -263,6 +263,26 @@ export default function HustleDetailScreen() {
             <View style={s.statBox}><Ionicons name="time-outline" size={20} color={Colors.trustBlue} /><Text style={s.statVal}>{hustle.time_required}</Text><Text style={s.statLbl}>Time Required</Text></View>
           </View>
           {hustle.why_good_fit ? <View style={s.fitBox}><Ionicons name="heart" size={16} color={Colors.gold} /><Text style={s.fitText}>{hustle.why_good_fit}</Text></View> : null}
+
+          {/* ═══════════ UPSELL BANNER (Free Users) ═══════════ */}
+          {hustle.hustle_tier === 'starter' && (
+            <TouchableOpacity style={s.upsellBanner} onPress={() => setShowMentor(true)} activeOpacity={0.85}>
+              <View style={s.upsellLeft}>
+                <View style={s.upsellIconRow}>
+                  <Ionicons name="sparkles" size={16} color="#E5A93E" />
+                  <Ionicons name="megaphone" size={16} color="#EC4899" />
+                  <Ionicons name="create" size={16} color="#8B5CF6" />
+                  <Ionicons name="calculator" size={16} color="#22C55E" />
+                </View>
+                <Text style={s.upsellTitle}>10x Your Revenue</Text>
+                <Text style={s.upsellSub}>Your personal AI agent team is ready to help you launch, market, and scale this hustle</Text>
+              </View>
+              <View style={s.upsellCTA}>
+                <Text style={s.upsellCTAText}>Try Now</Text>
+                <Ionicons name="arrow-forward" size={14} color="#000" />
+              </View>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* ═══════════ LAUNCH KIT SECTION ═══════════ */}
@@ -419,17 +439,21 @@ export default function HustleDetailScreen() {
         )}
       </ScrollView>
 
-      {/* ═══════════ FLOATING AI MENTOR BUTTON ═══════════ */}
+      {/* ═══════════ AI TEAM BUTTON (Redesigned) ═══════════ */}
       <TouchableOpacity
         testID="ai-mentor-fab"
-        style={s.mentorFab}
+        style={s.aiTeamBtn}
         onPress={() => setShowMentor(true)}
         activeOpacity={0.85}
       >
-        <View style={s.mentorFabInner}>
-          <Ionicons name="chatbubble-ellipses" size={24} color="#0F172A" />
+        <View style={s.aiTeamIconRow}>
+          <View style={[s.aiTeamDot, { backgroundColor: '#E5A93E' }]} />
+          <View style={[s.aiTeamDot, { backgroundColor: '#EC4899' }]} />
+          <View style={[s.aiTeamDot, { backgroundColor: '#8B5CF6' }]} />
+          <View style={[s.aiTeamDot, { backgroundColor: '#22C55E' }]} />
         </View>
-        <View style={s.mentorFabPulse} />
+        <Text style={s.aiTeamLabel}>AI Team</Text>
+        <Ionicons name="chevron-up" size={14} color="#000" />
       </TouchableOpacity>
 
       {/* ═══════════ AI AGENT HUB MODAL ═══════════ */}
@@ -460,12 +484,15 @@ export default function HustleDetailScreen() {
                   <TouchableOpacity
                     key={agent.id}
                     style={[s.agentTab, activeAgent === agent.id && { borderColor: agent.color, backgroundColor: agent.color + '15' }, agent.locked && s.agentTabLocked]}
-                    onPress={() => { if (!agent.locked) { switchAgent(agent.id); } }}
+                    onPress={() => {
+                      if (!agent.locked) { switchAgent(agent.id); }
+                      else { router.push('/pricing'); }
+                    }}
                     activeOpacity={0.7}
                   >
                     <Ionicons name={agent.locked ? 'lock-closed' : agent.icon} size={14} color={agent.locked ? Colors.textTertiary : (activeAgent === agent.id ? agent.color : Colors.textSecondary)} />
                     <Text style={[s.agentTabText, activeAgent === agent.id && { color: agent.color }, agent.locked && { color: Colors.textTertiary }]}>{agent.name}</Text>
-                    {agent.locked && <Text style={s.agentTabTier}>{agent.min_tier}</Text>}
+                    {agent.locked && agent.alacarte_price && <Text style={s.agentTabPrice}>${agent.alacarte_price}</Text>}
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -727,10 +754,11 @@ const s = StyleSheet.create({
   empireBtn: { borderWidth: 1.5, borderColor: Colors.gold, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12 },
   empireBtnTitle: { fontSize: 15, fontWeight: '700', color: Colors.gold },
   empireBtnDesc: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
-  // ── AI Mentor FAB ──
-  mentorFab: { position: 'absolute', bottom: 24, right: 24, zIndex: 100 },
-  mentorFabInner: { width: 60, height: 60, borderRadius: 30, backgroundColor: Colors.gold, justifyContent: 'center', alignItems: 'center', shadowColor: Colors.gold, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 8 },
-  mentorFabPulse: { position: 'absolute', width: 60, height: 60, borderRadius: 30, borderWidth: 2, borderColor: Colors.gold, opacity: 0.3 },
+  // ── AI Team Button ──
+  aiTeamBtn: { position: 'absolute', bottom: 20, right: 16, zIndex: 100, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.gold, paddingHorizontal: 18, paddingVertical: 14, borderRadius: 28, shadowColor: Colors.gold, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 8 },
+  aiTeamIconRow: { flexDirection: 'row', gap: 3 },
+  aiTeamDot: { width: 10, height: 10, borderRadius: 5 },
+  aiTeamLabel: { fontSize: 15, fontWeight: '800', color: '#000', letterSpacing: -0.3 },
   // ── AI Mentor Modal ──
   mentorSafe: { flex: 1, backgroundColor: Colors.background },
   mentorHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.border, backgroundColor: Colors.surface },
@@ -746,6 +774,15 @@ const s = StyleSheet.create({
   agentTabLocked: { opacity: 0.5 },
   agentTabText: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
   agentTabTier: { fontSize: 9, fontWeight: '700', color: Colors.textTertiary, textTransform: 'uppercase' as any },
+  agentTabPrice: { fontSize: 10, fontWeight: '800', color: Colors.gold, backgroundColor: Colors.orangeLight, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  // Upsell Banner
+  upsellBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.surfaceElevated, borderWidth: 1.5, borderColor: Colors.gold + '30', borderRadius: 16, padding: 18, marginTop: 16 },
+  upsellLeft: { flex: 1, gap: 6 },
+  upsellIconRow: { flexDirection: 'row', gap: 6, marginBottom: 2 },
+  upsellTitle: { fontSize: 17, fontWeight: '800', color: Colors.gold },
+  upsellSub: { fontSize: 12, color: Colors.textSecondary, lineHeight: 17, maxWidth: 260 },
+  upsellCTA: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.gold, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, marginLeft: 12 },
+  upsellCTAText: { fontSize: 13, fontWeight: '700', color: '#000' },
   mentorMessages: { paddingHorizontal: 16, paddingVertical: 12, paddingBottom: 8 },
   // ── Welcome ──
   mentorWelcome: { alignItems: 'center', paddingVertical: 32, gap: 12 },
