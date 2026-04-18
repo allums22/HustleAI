@@ -29,12 +29,32 @@ export default function HustleDetailScreen() {
   const [showMentor, setShowMentor] = useState(false);
   const [agents, setAgents] = useState<any[]>([]);
   const [activeAgent, setActiveAgent] = useState('mentor');
+  const [agentHistories, setAgentHistories] = useState<Record<string, any[]>>({});
 
   useEffect(() => { if (id) loadDetail(); }, [id]);
   useEffect(() => { loadAgents(); }, []);
 
   const loadAgents = async () => {
     try { const res = await api.getAgents(); setAgents(res.agents || []); } catch {}
+  };
+
+  const loadAgentHistory = async (agentId: string) => {
+    if (!id) return;
+    try {
+      const res = await api.getAgentHistory(id, agentId);
+      const msgs = (res.messages || []).map((m: any) => ({
+        role: m.role, text: m.text,
+        time: m.ts ? new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+      }));
+      setAgentHistories(prev => ({ ...prev, [agentId]: msgs }));
+    } catch {}
+  };
+
+  const switchAgent = async (agentId: string) => {
+    setActiveAgent(agentId);
+    if (!agentHistories[agentId]) {
+      await loadAgentHistory(agentId);
+    }
   };
 
   // Auto-poll for landing page when kit exists but page is still generating
@@ -163,18 +183,18 @@ export default function HustleDetailScreen() {
     const msg = (overrideMsg || mentorMsg).trim();
     if (!msg || mentorLoading) return;
     const userMessage = { role: 'user', text: msg, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
-    setMentorHistory(prev => [...prev, userMessage]);
+    setAgentHistories(prev => ({ ...prev, [activeAgent]: [...(prev[activeAgent] || []), userMessage] }));
     setMentorMsg('');
     setMentorLoading(true);
     try {
       const res = await api.agentChat(id!, msg, activeAgent);
       const aiMessage = { role: 'ai', text: res.response, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
-      setMentorHistory(prev => [...prev, aiMessage]);
+      setAgentHistories(prev => ({ ...prev, [activeAgent]: [...(prev[activeAgent] || []), aiMessage] }));
     } catch (e: any) {
       if (e.message?.includes('Upgrade') || e.message?.includes('requires')) {
-        setMentorHistory(prev => [...prev, { role: 'system', text: e.message, time: '' }]);
+        setAgentHistories(prev => ({ ...prev, [activeAgent]: [...(prev[activeAgent] || []), { role: 'system', text: e.message, time: '' }] }));
       } else {
-        setMentorHistory(prev => [...prev, { role: 'ai', text: 'Sorry, I had trouble responding. Please try again.', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
+        setAgentHistories(prev => ({ ...prev, [activeAgent]: [...(prev[activeAgent] || []), { role: 'ai', text: 'Sorry, I had trouble responding. Please try again.', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }] }));
       }
     } finally {
       setMentorLoading(false);
@@ -440,7 +460,7 @@ export default function HustleDetailScreen() {
                   <TouchableOpacity
                     key={agent.id}
                     style={[s.agentTab, activeAgent === agent.id && { borderColor: agent.color, backgroundColor: agent.color + '15' }, agent.locked && s.agentTabLocked]}
-                    onPress={() => { if (!agent.locked) { setActiveAgent(agent.id); setMentorHistory([]); } }}
+                    onPress={() => { if (!agent.locked) { switchAgent(agent.id); } }}
                     activeOpacity={0.7}
                   >
                     <Ionicons name={agent.locked ? 'lock-closed' : agent.icon} size={14} color={agent.locked ? Colors.textTertiary : (activeAgent === agent.id ? agent.color : Colors.textSecondary)} />
@@ -454,22 +474,22 @@ export default function HustleDetailScreen() {
             {/* Chat Messages */}
             <FlatList
               ref={mentorScrollRef}
-              data={mentorHistory}
-              keyExtractor={(_, i) => `msg-${i}`}
+              data={agentHistories[activeAgent] || []}
+              keyExtractor={(_, i) => `msg-${activeAgent}-${i}`}
               contentContainerStyle={s.mentorMessages}
               onContentSizeChange={() => mentorScrollRef.current?.scrollToEnd({ animated: true })}
               ListHeaderComponent={
-                mentorHistory.length === 0 ? (
+                !(agentHistories[activeAgent]?.length) ? (
                   <View style={s.mentorWelcome}>
-                    <View style={s.mentorWelcomeIcon}>
-                      <Ionicons name="sparkles" size={32} color={Colors.gold} />
+                    <View style={[s.mentorWelcomeIcon, { backgroundColor: (agents.find(a => a.id === activeAgent)?.color || Colors.gold) + '20' }]}>
+                      <Ionicons name={(agents.find(a => a.id === activeAgent)?.icon || 'sparkles') as any} size={32} color={agents.find(a => a.id === activeAgent)?.color || Colors.gold} />
                     </View>
-                    <Text style={s.mentorWelcomeTitle}>Your Personal Business Coach</Text>
+                    <Text style={s.mentorWelcomeTitle}>{agents.find(a => a.id === activeAgent)?.name || 'AI Agent'}</Text>
                     <Text style={s.mentorWelcomeSub}>
-                      Ask me anything about {hustle?.name}. I'll give you specific, actionable advice to help you succeed.
+                      {agents.find(a => a.id === activeAgent)?.description || 'Ask me anything about your hustle.'}
                     </Text>
                     <View style={s.mentorSuggestions}>
-                      {MENTOR_SUGGESTIONS.map((suggestion, i) => (
+                      {(agents.find(a => a.id === activeAgent)?.prompts || MENTOR_SUGGESTIONS).map((suggestion: string, i: number) => (
                         <TouchableOpacity
                           key={i}
                           style={s.mentorSuggestionChip}

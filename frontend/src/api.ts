@@ -89,6 +89,8 @@ export const api = {
   getAgents: () => request('/api/agents'),
   agentChat: (hustleId: string, message: string, agentId: string = 'mentor') =>
     request(`/api/agents/${hustleId}/chat`, { method: 'POST', body: JSON.stringify({ message, agent_id: agentId }) }),
+  getAgentHistory: (hustleId: string, agentId: string) =>
+    request(`/api/agents/${hustleId}/history/${agentId}`),
 
   // Landing Page Customization
   customizeLandingPage: (hustleId: string, data: { email?: string; phone?: string; name?: string; website?: string; instagram?: string; facebook?: string }) =>

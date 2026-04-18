@@ -314,7 +314,7 @@ Return ONLY JSON:
         user_phone = user_doc.get("phone", "") if user_doc else ""
 
         # Pick template variant based on hustle name hash (deterministic but varied)
-        variant = hash(biz_name + hustle['name']) % 5
+        variant = sum(ord(c) for c in hustle_id) % 5
 
         html = get_template(variant, {
             "biz_name": biz_name, "tagline": tagline, "pitch": pitch,
@@ -742,7 +742,7 @@ async def generate_launch_kit(hustle_id: str, user: dict = Depends(get_current_u
         try:
             from templates import get_template
             biz_name = existing.get("business_name", hustle.get("name", ""))
-            variant = hash(biz_name + hustle.get('name', '')) % 5
+            variant = sum(ord(c) for c in hustle_id) % 5
             html = get_template(variant, {
                 "biz_name": biz_name, "tagline": existing.get("tagline", ""),
                 "pitch": existing.get("elevator_pitch", ""), "target": existing.get("target_audience", ""),
@@ -985,7 +985,7 @@ async def customize_landing_page(hustle_id: str, request: Request, user: dict = 
     hustle = await db.side_hustles.find_one({"hustle_id": hustle_id, "user_id": user["user_id"]}, {"_id": 0})
     from templates import get_template
     biz_name = kit.get("business_name", hustle.get("name", "") if hustle else "")
-    variant = hash(biz_name + (hustle.get('name', '') if hustle else '')) % 5
+    variant = sum(ord(c) for c in hustle_id) % 5
     html = get_template(variant, {
         "biz_name": biz_name, "tagline": kit.get("tagline", ""),
         "pitch": kit.get("elevator_pitch", ""), "target": kit.get("target_audience", ""),
@@ -1032,34 +1032,62 @@ AI_AGENTS = {
     "mentor": {
         "name": "AI Mentor",
         "icon": "sparkles",
-        "description": "Your personal business coach",
+        "description": "Your personal business coach — ask about strategy, growth, or any business question",
         "color": "#E5A93E",
         "min_tier": "starter",
         "system_prefix": "You are an expert business mentor.",
+        "prompts": [
+            "How do I find my first client?",
+            "What should I charge for my services?",
+            "How do I stand out from competitors?",
+            "What's the fastest path to $1000/month?",
+            "How do I scale beyond a one-person operation?",
+        ],
     },
     "marketing": {
         "name": "Marketing Agent",
         "icon": "megaphone",
-        "description": "Social media, ads, and growth strategies",
+        "description": "Expert in social media, paid ads, SEO, and customer acquisition strategies",
         "color": "#EC4899",
         "min_tier": "pro",
         "system_prefix": "You are a world-class digital marketing strategist specializing in small business growth.",
+        "prompts": [
+            "Write me 5 social media posts for this week",
+            "Create a 30-day content calendar",
+            "What's the best paid ad strategy on a $200 budget?",
+            "How do I get my first 100 followers?",
+            "Write an email sequence to convert leads",
+        ],
     },
     "content": {
         "name": "Content Writer",
         "icon": "create",
-        "description": "Blog posts, emails, and copy",
+        "description": "Creates blog posts, email campaigns, ad copy, and SEO-optimized content",
         "color": "#8B5CF6",
         "min_tier": "empire",
         "system_prefix": "You are an expert content writer and copywriter who creates engaging, conversion-optimized content.",
+        "prompts": [
+            "Write a blog post introducing my business",
+            "Create an elevator pitch I can use at events",
+            "Write a cold outreach email template",
+            "Create a compelling About page for my website",
+            "Draft 3 testimonial request emails",
+        ],
     },
     "finance": {
         "name": "Finance Advisor",
         "icon": "calculator",
-        "description": "Pricing, projections, and budgets",
+        "description": "Helps with pricing strategy, revenue projections, budgets, and financial planning",
         "color": "#22C55E",
         "min_tier": "empire",
         "system_prefix": "You are a financial advisor specializing in small business and side hustle economics.",
+        "prompts": [
+            "Create a monthly budget breakdown for my hustle",
+            "What pricing model maximizes my revenue?",
+            "Project my revenue for the next 6 months",
+            "What tax deductions can I claim?",
+            "How much should I reinvest vs take home?",
+        ],
     },
 }
 
@@ -1079,8 +1107,25 @@ async def get_agents(user: dict = Depends(get_current_user)):
             "color": agent["color"],
             "locked": user_level < min_level,
             "min_tier": agent["min_tier"],
+            "prompts": agent.get("prompts", []),
         })
     return {"agents": agents}
+
+# Save agent conversation to DB after each message
+async def _save_agent_message(user_id: str, hustle_id: str, agent_id: str, role: str, text: str):
+    await db.agent_conversations.update_one(
+        {"user_id": user_id, "hustle_id": hustle_id, "agent_id": agent_id},
+        {"$push": {"messages": {"role": role, "text": text, "ts": datetime.now(timezone.utc).isoformat()}}},
+        upsert=True
+    )
+
+@api_router.get("/agents/{hustle_id}/history/{agent_id}")
+async def get_agent_history(hustle_id: str, agent_id: str, user: dict = Depends(get_current_user)):
+    conv = await db.agent_conversations.find_one(
+        {"user_id": user["user_id"], "hustle_id": hustle_id, "agent_id": agent_id},
+        {"_id": 0, "messages": 1}
+    )
+    return {"messages": conv.get("messages", []) if conv else []}
 
 class AgentChatRequest(BaseModel):
     message: str
@@ -1134,6 +1179,9 @@ IMPORTANT: Write in plain conversational text. No asterisks, hashtags, backticks
         clean = re.sub(r'\*{1,3}([^*]+)\*{1,3}', r'\1', response)
         clean = re.sub(r'^#{1,6}\s*', '', clean, flags=re.MULTILINE)
         clean = re.sub(r'`([^`]+)`', r'\1', clean)
+        # Save conversation to DB
+        await _save_agent_message(user["user_id"], hustle_id, req.agent_id, "user", message)
+        await _save_agent_message(user["user_id"], hustle_id, req.agent_id, "ai", clean)
         return {"response": clean, "agent_id": req.agent_id, "agent_name": agent["name"]}
     except Exception as e:
         logger.error(f"Agent {req.agent_id} error: {e}")
