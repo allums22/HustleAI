@@ -73,10 +73,11 @@ SUBSCRIPTION_TIERS = {
 ALACARTE_PLAN_PRICE = 4.99
 ALACARTE_KIT_PRICE = 2.99
 ALACARTE_AGENT_PRICES = {
-    "marketing": {"price": 4.99, "name": "Marketing Agent"},
-    "content": {"price": 4.99, "name": "Content Writer"},
-    "finance": {"price": 4.99, "name": "Finance Advisor"},
+    "marketing": {"price": 9.99, "name": "Marketing Agent"},
+    "content": {"price": 9.99, "name": "Content Writer"},
+    "finance": {"price": 9.99, "name": "Finance Advisor"},
 }
+ALACARTE_AGENT_PACK_PRICE = 19.99  # All 3 premium agents — 33% discount
 REFERRAL_CREDIT = 5.00
 
 # ─── Questionnaire Questions ───
@@ -1118,7 +1119,7 @@ async def get_agents(user: dict = Depends(get_current_user)):
             "prompts": agent.get("prompts", []),
             "alacarte_price": ALACARTE_AGENT_PRICES.get(key, {}).get("price"),
         })
-    return {"agents": agents, "alacarte_prices": ALACARTE_AGENT_PRICES}
+    return {"agents": agents, "alacarte_prices": ALACARTE_AGENT_PRICES, "agent_pack_price": ALACARTE_AGENT_PACK_PRICE}
 
 # Save agent conversation to DB after each message
 async def _save_agent_message(user_id: str, hustle_id: str, agent_id: str, role: str, text: str):

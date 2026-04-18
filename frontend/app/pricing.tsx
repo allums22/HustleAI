@@ -91,6 +91,7 @@ export default function PricingScreen() {
         {/* À la carte */}
         <View style={styles.alacarteSection}>
           <View style={styles.dividerRow}><View style={styles.dividerLine} /><Text style={styles.dividerText}>pay per item</Text><View style={styles.dividerLine} /></View>
+          <Text style={styles.alacarteNote}>Agents are chat only — no plans or kits included</Text>
           <View style={styles.alacarteRow}>
             <View style={styles.alacarteCard}>
               <Ionicons name="document-text" size={22} color={Colors.trustBlue} />
@@ -106,10 +107,34 @@ export default function PricingScreen() {
             </View>
             <View style={styles.alacarteCard}>
               <Ionicons name="sparkles" size={22} color={Colors.orangeCTA} />
-              <Text style={styles.alacarteTitle}>AI Agent</Text>
-              <Text style={styles.alacartePrice}>$4.99</Text>
+              <Text style={styles.alacarteTitle}>Single Agent</Text>
+              <Text style={styles.alacartePrice}>$9.99</Text>
               <Text style={styles.alacartePer}>/mo each</Text>
             </View>
+          </View>
+          {/* Agent Pack */}
+          <View style={styles.agentPack}>
+            <View style={styles.agentPackBadge}><Text style={styles.agentPackBadgeText}>SAVE 33%</Text></View>
+            <View style={styles.agentPackRow}>
+              <View style={{ flex: 1 }}>
+                <View style={styles.agentPackIcons}>
+                  <Ionicons name="megaphone" size={16} color="#EC4899" />
+                  <Ionicons name="create" size={16} color="#8B5CF6" />
+                  <Ionicons name="calculator" size={16} color="#22C55E" />
+                </View>
+                <Text style={styles.agentPackTitle}>AI Agent Pack</Text>
+                <Text style={styles.agentPackSub}>All 3 premium agents</Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={styles.agentPackOld}>$29.97</Text>
+                <Text style={styles.agentPackPrice}>$19.99<Text style={styles.agentPackMo}>/mo</Text></Text>
+              </View>
+            </View>
+          </View>
+          {/* Value nudge */}
+          <View style={styles.valueNudge}>
+            <Ionicons name="bulb-outline" size={14} color={Colors.gold} />
+            <Text style={styles.valueNudgeText}>Pro ($29.99/mo) includes Marketing Agent + unlimited plans + 5 kits — better value than buying separately</Text>
           </View>
         </View>
         <View style={styles.guaranteeRow}><Ionicons name="shield-checkmark" size={18} color={Colors.growthGreen} /><Text style={styles.guaranteeText}>Secure checkout via Stripe</Text></View>
@@ -158,10 +183,23 @@ const styles = StyleSheet.create({
   dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
   dividerText: { fontSize: 12, fontWeight: '600', color: Colors.textTertiary, textTransform: 'uppercase' },
   alacarteRow: { flexDirection: 'row', gap: 10 },
-  alacarteCard: { flex: 1, backgroundColor: Colors.surface, borderRadius: 12, padding: 16, alignItems: 'center', gap: 4, borderWidth: 1.5, borderColor: Colors.border, borderStyle: 'dashed' },
+  alacarteCard: { flex: 1, backgroundColor: Colors.surface, borderRadius: 12, padding: 16, alignItems: 'center', gap: 4, borderWidth: 1.5, borderColor: Colors.border, borderStyle: 'dashed' as any },
+  alacarteNote: { fontSize: 12, color: Colors.textTertiary, textAlign: 'center', marginBottom: 12 },
   alacarteTitle: { fontSize: 13, fontWeight: '700', color: Colors.textPrimary },
   alacartePrice: { fontSize: 22, fontWeight: '800', color: Colors.orangeCTA },
   alacartePer: { fontSize: 11, color: Colors.textTertiary },
+  agentPack: { backgroundColor: Colors.surfaceElevated, borderWidth: 1.5, borderColor: Colors.gold + '40', borderRadius: 14, padding: 18, marginTop: 14, position: 'relative' as any },
+  agentPackBadge: { position: 'absolute' as any, top: -10, right: 14, backgroundColor: Colors.gold, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
+  agentPackBadgeText: { fontSize: 10, fontWeight: '800', color: '#000', letterSpacing: 0.5 },
+  agentPackRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  agentPackIcons: { flexDirection: 'row', gap: 6, marginBottom: 6 },
+  agentPackTitle: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary },
+  agentPackSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
+  agentPackOld: { fontSize: 14, color: Colors.textTertiary, textDecorationLine: 'line-through' as any },
+  agentPackPrice: { fontSize: 24, fontWeight: '900', color: Colors.gold },
+  agentPackMo: { fontSize: 14, fontWeight: '600' },
+  valueNudge: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 14, backgroundColor: Colors.orangeLight, padding: 12, borderRadius: 10 },
+  valueNudgeText: { fontSize: 12, color: Colors.gold, flex: 1, lineHeight: 17 },
   guaranteeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   guaranteeText: { fontSize: 13, color: Colors.textSecondary },
 });
