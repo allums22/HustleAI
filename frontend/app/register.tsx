@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../src/context/AuthContext';
@@ -18,6 +18,7 @@ export default function RegisterScreen() {
   const [error, setError] = useState('');
   const { login } = useAuth();
   const router = useRouter();
+  const { beta } = useLocalSearchParams<{ beta?: string }>();
 
   const handleRegister = async () => {
     if (!name.trim() || !email.trim() || !password.trim()) {
@@ -33,7 +34,11 @@ export default function RegisterScreen() {
     try {
       const res = await api.register(email.trim(), password, name.trim());
       await login(res.session_token, res.user);
-      router.replace('/questionnaire');
+      // Auto-redeem beta promo code if coming from beta invite
+      if (beta) {
+        try { await api.redeemPromo(beta); } catch {}
+      }
+      router.replace('/welcome');
     } catch (e: any) {
       setError(e.message || 'Registration failed');
     } finally {

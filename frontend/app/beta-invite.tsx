@@ -142,7 +142,7 @@ export default function BetaInviteScreen() {
         </View>
 
         {/* CTA */}
-        <TouchableOpacity style={s.ctaBtn} onPress={() => router.push('/register')} activeOpacity={0.85}>
+        <TouchableOpacity style={s.ctaBtn} onPress={() => router.push('/register?beta=HUSTLEVIP2025')} activeOpacity={0.85}>
           <Text style={s.ctaBtnText}>Accept Invitation & Create Account</Text>
           <Ionicons name="arrow-forward" size={18} color="#000" />
         </TouchableOpacity>

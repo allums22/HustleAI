@@ -13,6 +13,7 @@ export default function RootLayout() {
         <Stack.Screen name="register" />
         <Stack.Screen name="auth-callback" />
         <Stack.Screen name="nda" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="welcome" options={{ gestureEnabled: false }} />
         <Stack.Screen name="questionnaire" options={{ gestureEnabled: false }} />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="hustle/[id]" />

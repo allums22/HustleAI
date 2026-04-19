@@ -34,6 +34,11 @@ export default function DashboardScreen() {
         const ndaRes = await api.getNdaStatus();
         if (!ndaRes.accepted) { router.replace('/nda'); return; }
       } catch {}
+      // If no hustles, user hasn't completed questionnaire — send to welcome
+      if ((hustlesRes.hustles || []).length === 0) {
+        router.replace('/welcome');
+        return;
+      }
       // Load motivation & streak
       try {
         const [motRes, streakRes] = await Promise.all([api.getDailyMotivation(), api.getStreak()]);
