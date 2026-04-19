@@ -14,7 +14,7 @@ export default function HustlesScreen() {
   const [hustles, setHustles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'starter' | 'premium'>('all');
+  const [filter, setFilter] = useState<'all' | 'researched' | 'starter' | 'premium'>('all');
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [industryQuery, setIndustryQuery] = useState('');
   const [industryLoading, setIndustryLoading] = useState(false);
@@ -30,8 +30,9 @@ export default function HustlesScreen() {
   useEffect(() => { loadHustles(); }, [loadHustles]);
 
   const filtered = hustles.filter(h => {
-    if (filter === 'starter') return h.hustle_tier === 'starter' || !h.locked;
-    if (filter === 'premium') return h.hustle_tier === 'premium' || h.locked;
+    if (filter === 'researched') return h.researched;
+    if (filter === 'starter') return h.hustle_tier === 'starter';
+    if (filter === 'premium') return h.hustle_tier === 'premium';
     return true;
   });
 
@@ -88,12 +89,12 @@ export default function HustlesScreen() {
       </View>
 
       <View style={styles.filterRow}>
-        {(['all', 'starter', 'premium'] as const).map(f => (
+        {(['all', 'researched', 'starter', 'premium'] as const).map(f => (
           <TouchableOpacity key={f} testID={`filter-${f}`}
             style={[styles.filterBtn, filter === f && styles.filterBtnActive]}
             onPress={() => setFilter(f)}>
             <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>
-              {f === 'all' ? 'All' : f === 'starter' ? 'Starter' : 'Premium'}
+              {f === 'all' ? 'All' : f === 'researched' ? 'Researched' : f === 'starter' ? 'Starter' : 'Premium'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -102,8 +103,20 @@ export default function HustlesScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadHustles(); }} />}>
         {filtered.length === 0 ? (
-          <View style={styles.emptyState}><Ionicons name="search" size={40} color={Colors.textTertiary} /><Text style={styles.emptyText}>No hustles found</Text></View>
-        ) : filtered.map(h => (
+          <View style={styles.emptyState}><Ionicons name="search" size={40} color={Colors.textTertiary} /><Text style={styles.emptyText}>{filter === 'researched' ? 'No researched hustles yet. Tap on a hustle to explore it!' : 'No hustles found'}</Text></View>
+        ) : (
+          Object.entries(
+            filtered.reduce((groups: Record<string, any[]>, h: any) => {
+              const cat = h.category || 'General';
+              if (!groups[cat]) groups[cat] = [];
+              groups[cat].push(h);
+              return groups;
+            }, {})
+          ).sort(([a], [b]) => a.localeCompare(b)).map(([category, categoryHustles]) => (
+            <View key={category} style={styles.categorySection}>
+              <Text style={styles.categorySectionTitle}>{category}</Text>
+              <Text style={styles.categorySectionCount}>{(categoryHustles as any[]).length} hustle{(categoryHustles as any[]).length !== 1 ? 's' : ''}</Text>
+              {(categoryHustles as any[]).map((h: any) => (
           <TouchableOpacity key={h.hustle_id} testID={`hustle-item-${h.hustle_id}`}
             style={[styles.card, h.locked && styles.cardLocked]}
             onPress={() => handleHustlePress(h)} activeOpacity={0.7}>
@@ -161,6 +174,9 @@ export default function HustlesScreen() {
             </View>
           </TouchableOpacity>
         ))}
+            </View>
+          ))
+        )}
       </ScrollView>
 
       {/* Upgrade Modal */}
@@ -199,6 +215,9 @@ const styles = StyleSheet.create({
   industryBar: { flexDirection: 'row', gap: 8, paddingHorizontal: 24, paddingVertical: 8, maxWidth: 1000, alignSelf: 'center', width: '100%' },
   industryInput: { flex: 1, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: Colors.textPrimary },
   industryBtn: { width: 48, height: 48, borderRadius: 12, backgroundColor: Colors.gold, justifyContent: 'center', alignItems: 'center' },
+  categorySection: { marginBottom: 20 },
+  categorySectionTitle: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary, paddingHorizontal: 24, marginBottom: 2 },
+  categorySectionCount: { fontSize: 12, color: Colors.textTertiary, paddingHorizontal: 24, marginBottom: 12 },
   filterBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
   filterBtnActive: { backgroundColor: Colors.trustBlue, borderColor: Colors.trustBlue },
   filterText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },

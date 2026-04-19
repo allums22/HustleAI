@@ -96,6 +96,13 @@ export const api = {
   generateIndustryHustles: (industry: string) =>
     request('/api/hustles/generate/industry', { method: 'POST', body: JSON.stringify({ industry }) }),
 
+  // Plans list
+  getPlansList: () => request('/api/plans'),
+
+  // Research tracking
+  markResearched: (hustleId: string) =>
+    request(`/api/hustles/${hustleId}/research`, { method: 'POST' }),
+
   // Landing Page Customization
   customizeLandingPage: (hustleId: string, data: { email?: string; phone?: string; name?: string; website?: string; instagram?: string; facebook?: string }) =>
     request(`/api/launch-kit/${hustleId}/customize`, { method: 'PUT', body: JSON.stringify(data) }),

@@ -1046,6 +1046,10 @@ async def customize_landing_page(hustle_id: str, request: Request, user: dict = 
     website = body.get("website", "")
     instagram = body.get("instagram", "")
     facebook = body.get("facebook", "")
+    custom_primary = body.get("primary_color", "")
+    custom_accent = body.get("accent_color", "")
+    custom_tagline = body.get("tagline", "")
+    custom_biz_name = body.get("biz_name", "")
     
     # Update user profile
     profile_updates: Dict[str, Any] = {}
@@ -1065,20 +1069,57 @@ async def customize_landing_page(hustle_id: str, request: Request, user: dict = 
     biz_name = kit.get("business_name", hustle.get("name", "") if hustle else "")
     variant = sum(ord(c) for c in hustle_id) % 5
     html = get_template(variant, {
-        "biz_name": biz_name, "tagline": kit.get("tagline", ""),
+        "biz_name": custom_biz_name or biz_name,
+        "tagline": custom_tagline or kit.get("tagline", ""),
         "pitch": kit.get("elevator_pitch", ""), "target": kit.get("target_audience", ""),
-        "primary": kit.get("brand_colors", {}).get("primary", "#6366F1"),
-        "accent": kit.get("brand_colors", {}).get("accent", "#EC4899"),
+        "primary": custom_primary or kit.get("brand_colors", {}).get("primary", "#6366F1"),
+        "accent": custom_accent or kit.get("brand_colors", {}).get("accent", "#EC4899"),
         "email": email, "phone": phone, "name": name,
         "strategies": kit.get("marketing_strategy", []),
         "pricing_tiers": kit.get("pricing_tiers", []),
     })
     
+    # Save customization + update kit branding if changed
+    kit_updates: Dict[str, Any] = {"landing_page_html": html, "custom_links": custom_links}
+    if custom_biz_name:
+        kit_updates["business_name"] = custom_biz_name
+    if custom_tagline:
+        kit_updates["tagline"] = custom_tagline
+    if custom_primary or custom_accent:
+        bc = kit.get("brand_colors", {})
+        if custom_primary:
+            bc["primary"] = custom_primary
+        if custom_accent:
+            bc["accent"] = custom_accent
+        kit_updates["brand_colors"] = bc
+    
     await db.launch_kits.update_one(
         {"hustle_id": hustle_id, "user_id": user["user_id"]},
-        {"$set": {"landing_page_html": html, "custom_links": custom_links}}
+        {"$set": kit_updates}
     )
     return {"status": "ok", "html": html}
+
+# ─── PLANS LIST ───
+@api_router.get("/plans")
+async def get_plans_list(user: dict = Depends(get_current_user)):
+    plans = await db.business_plans.find(
+        {"user_id": user["user_id"]}, {"_id": 0, "plan_id": 1, "hustle_id": 1, "title": 1, "overview": 1, "created_at": 1}
+    ).sort("created_at", -1).to_list(100)
+    # Enrich with hustle names
+    for p in plans:
+        hustle = await db.side_hustles.find_one({"hustle_id": p.get("hustle_id")}, {"_id": 0, "name": 1, "category": 1})
+        p["hustle_name"] = hustle.get("name", "Unknown") if hustle else "Unknown"
+        p["hustle_category"] = hustle.get("category", "General") if hustle else "General"
+    return {"plans": plans}
+
+# ─── HUSTLE RESEARCH TRACKING ───
+@api_router.post("/hustles/{hustle_id}/research")
+async def mark_researched(hustle_id: str, user: dict = Depends(get_current_user)):
+    await db.side_hustles.update_one(
+        {"hustle_id": hustle_id, "user_id": user["user_id"]},
+        {"$set": {"researched": True, "researched_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"status": "ok"}
 
 # ─── BETA NDA & FEEDBACK ───
 

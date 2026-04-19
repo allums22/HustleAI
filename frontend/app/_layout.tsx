@@ -19,6 +19,7 @@ export default function RootLayout() {
         <Stack.Screen name="hustle/[id]" />
         <Stack.Screen name="launch-page/[id]" />
         <Stack.Screen name="pricing" />
+        <Stack.Screen name="plans" />
         <Stack.Screen name="payment-success" />
         <Stack.Screen name="feedback" />
       </Stack>

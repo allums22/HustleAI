@@ -142,7 +142,7 @@ export default function DashboardScreen() {
             <Text style={[styles.statNumber, { color: Colors.trustBlue }]}>{hustles.length}</Text>
             <Text style={styles.statLabel}>Total Hustles</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.statCard, { backgroundColor: Colors.growthGreenLight }]} onPress={() => router.push('/(tabs)/progress')} activeOpacity={0.7}>
+          <TouchableOpacity style={[styles.statCard, { backgroundColor: Colors.growthGreenLight }]} onPress={() => router.push('/plans')} activeOpacity={0.7}>
             <Text style={[styles.statNumber, { color: Colors.growthGreen }]}>{profile?.stats?.plans_generated || 0}</Text>
             <Text style={styles.statLabel}>Plans</Text>
           </TouchableOpacity>

@@ -25,6 +25,10 @@ export default function LaunchPagePreview() {
   const [formWebsite, setFormWebsite] = useState('');
   const [formInstagram, setFormInstagram] = useState('');
   const [formFacebook, setFormFacebook] = useState('');
+  const [formPrimaryColor, setFormPrimaryColor] = useState('');
+  const [formAccentColor, setFormAccentColor] = useState('');
+  const [formTagline, setFormTagline] = useState('');
+  const [formBizName, setFormBizName] = useState('');
 
   useEffect(() => {
     if (id) loadKit();
@@ -62,7 +66,11 @@ export default function LaunchPagePreview() {
         website: formWebsite,
         instagram: formInstagram,
         facebook: formFacebook,
-      });
+        primary_color: formPrimaryColor || undefined,
+        accent_color: formAccentColor || undefined,
+        tagline: formTagline || undefined,
+        biz_name: formBizName || undefined,
+      } as any);
       if (res.html) {
         setHtml(res.html);
       }
@@ -217,6 +225,64 @@ export default function LaunchPagePreview() {
               </View>
 
               <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <View style={styles.formSection}>
+                  <Text style={styles.formSectionLabel}>Branding & Design</Text>
+
+                  <View style={styles.formField}>
+                    <View style={styles.formFieldIcon}>
+                      <Ionicons name="business-outline" size={16} color={Colors.gold} />
+                    </View>
+                    <TextInput
+                      style={styles.formInput}
+                      placeholder="Business / Logo name"
+                      placeholderTextColor={Colors.textTertiary}
+                      value={formBizName}
+                      onChangeText={setFormBizName}
+                    />
+                  </View>
+
+                  <View style={styles.formField}>
+                    <View style={styles.formFieldIcon}>
+                      <Ionicons name="text-outline" size={16} color={Colors.gold} />
+                    </View>
+                    <TextInput
+                      style={styles.formInput}
+                      placeholder="Custom tagline"
+                      placeholderTextColor={Colors.textTertiary}
+                      value={formTagline}
+                      onChangeText={setFormTagline}
+                    />
+                  </View>
+
+                  <View style={styles.formField}>
+                    <View style={styles.formFieldIcon}>
+                      <Ionicons name="color-palette-outline" size={16} color={Colors.gold} />
+                    </View>
+                    <TextInput
+                      style={styles.formInput}
+                      placeholder="Primary color (e.g. #6366F1)"
+                      placeholderTextColor={Colors.textTertiary}
+                      value={formPrimaryColor}
+                      onChangeText={setFormPrimaryColor}
+                      autoCapitalize="none"
+                    />
+                  </View>
+
+                  <View style={styles.formField}>
+                    <View style={styles.formFieldIcon}>
+                      <Ionicons name="color-fill-outline" size={16} color={Colors.gold} />
+                    </View>
+                    <TextInput
+                      style={styles.formInput}
+                      placeholder="Accent color (e.g. #EC4899)"
+                      placeholderTextColor={Colors.textTertiary}
+                      value={formAccentColor}
+                      onChangeText={setFormAccentColor}
+                      autoCapitalize="none"
+                    />
+                  </View>
+                </View>
+
                 <View style={styles.formSection}>
                   <Text style={styles.formSectionLabel}>Contact Information</Text>
                   

@@ -83,6 +83,8 @@ export default function HustleDetailScreen() {
       setPlan(detailRes.business_plan);
       setAccess(accessRes);
       setKitAccess(kitAccessRes);
+      // Mark as researched
+      try { await api.markResearched(id!); } catch {}
       // Load existing kit if exists
       if (kitAccessRes?.kit_exists) {
         try { const kr = await api.getKit(id!); setKit(kr.kit); } catch {}
