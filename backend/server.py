@@ -1082,11 +1082,6 @@ async def customize_landing_page(hustle_id: str, request: Request, user: dict = 
 
 # ─── BETA NDA & FEEDBACK ───
 
-# Serve the launch guide PDF
-@api_router.get("/launch-guide")
-async def download_launch_guide():
-    return FileResponse("/app/frontend/assets/HustleAI_Launch_Guide.pdf", media_type="application/pdf", filename="HustleAI_Launch_Guide.pdf")
-
 @api_router.post("/beta/accept-nda")
 async def accept_nda(user: dict = Depends(get_current_user)):
     await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"nda_accepted": True, "nda_accepted_at": datetime.now(timezone.utc).isoformat()}})
