@@ -92,6 +92,10 @@ export const api = {
   getAgentHistory: (hustleId: string, agentId: string) =>
     request(`/api/agents/${hustleId}/history/${agentId}`),
 
+  // Industry Hustle Request
+  generateIndustryHustles: (industry: string) =>
+    request('/api/hustles/generate/industry', { method: 'POST', body: JSON.stringify({ industry }) }),
+
   // Landing Page Customization
   customizeLandingPage: (hustleId: string, data: { email?: string; phone?: string; name?: string; website?: string; instagram?: string; facebook?: string }) =>
     request(`/api/launch-kit/${hustleId}/customize`, { method: 'PUT', body: JSON.stringify(data) }),

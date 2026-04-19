@@ -572,6 +572,7 @@ Return ONLY JSON array of 12 objects with: "name", "description" (2 sentences), 
             "category": h.get("category", "General"),
             "why_good_fit": h.get("why_good_fit", ""),
             "hustle_tier": tier_label,
+            "is_premium": tier_label == "premium",
             "selected": False, "business_plan_generated": False,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -581,16 +582,86 @@ Return ONLY JSON array of 12 objects with: "name", "description" (2 sentences), 
     await db.users.update_one({"user_id": user["user_id"]}, {"$inc": {"hustle_count": len(created)}})
     return {"hustles": created}
 
+class IndustryRequest(BaseModel):
+    industry: str
+
+@api_router.post("/hustles/generate/industry")
+async def generate_industry_hustles(req: IndustryRequest, user: dict = Depends(get_current_user)):
+    """Generate hustles for a specific industry/niche."""
+    industry = req.industry.strip()
+    if not industry:
+        raise HTTPException(status_code=400, detail="Industry required")
+    qr = await db.questionnaire_responses.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    answers = qr.get("answers", {}) if qr else {}
+    
+    prompt = f"""Generate exactly 6 side hustle recommendations specifically within the "{industry}" industry/niche.
+
+User Profile:
+- Skills: {answers.get('skills', 'Not specified')}
+- Hours: {answers.get('hours_per_week', '10-20')}/week
+- Budget: {answers.get('budget', '$100-$500')}
+- Income goal: {answers.get('income_goal', '$1000-$3000')}/mo
+
+RULES:
+- ALL 6 hustles must be directly related to {industry}
+- Be creative and specific — don't give generic answers
+- First 2: "starter" tier ($100-$500/week)
+- Next 4: "premium" tier ($1000-$5000/week)
+
+Return ONLY JSON array of 6 objects with: "name", "description" (2 sentences), "potential_income", "difficulty", "time_required", "category" (set to "{industry}"), "why_good_fit", "hustle_tier" (starter/premium)."""
+
+    try:
+        chat = LlmChat(api_key=emergent_key,
+            session_id=f"ind_{user['user_id']}_{uuid.uuid4().hex[:6]}",
+            system_message="Expert side hustle advisor. Return valid JSON only.")
+        chat.with_model("openai", "gpt-5.2")
+        response = await chat.send_message(UserMessage(text=prompt))
+        cleaned = response.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        hustles_data = json.loads(cleaned.strip())
+        if not isinstance(hustles_data, list):
+            hustles_data = hustles_data.get("hustles", [])
+    except Exception as e:
+        logger.error(f"Industry generation error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate. Try again.")
+
+    created = []
+    for h in hustles_data:
+        hustle_id = f"hustle_{uuid.uuid4().hex[:12]}"
+        tier_label = h.get("hustle_tier", "starter")
+        doc = {
+            "hustle_id": hustle_id, "user_id": user["user_id"],
+            "name": h.get("name", "Untitled"), "description": h.get("description", ""),
+            "potential_income": h.get("potential_income", "Varies"),
+            "difficulty": h.get("difficulty", "Medium"),
+            "time_required": h.get("time_required", "Varies"),
+            "category": industry,
+            "why_good_fit": h.get("why_good_fit", ""),
+            "hustle_tier": tier_label,
+            "is_premium": tier_label == "premium",
+            "industry_request": industry,
+            "selected": False, "business_plan_generated": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.side_hustles.insert_one(doc)
+        del doc["_id"]
+        created.append(doc)
+    return {"hustles": created, "industry": industry}
+
 @api_router.get("/hustles")
 async def get_hustles(user: dict = Depends(get_current_user)):
     hustles = await db.side_hustles.find(
         {"user_id": user["user_id"]}, {"_id": 0}
-    ).sort("created_at", -1).to_list(100)
+    ).sort("created_at", -1).to_list(500)
     tier = user.get("subscription_tier", "free")
     result = []
     for h in hustles:
         h_copy = {**h}
         htier = h_copy.get("hustle_tier", classify_hustle_income(h_copy.get("potential_income", "")))
+        h_copy["is_premium"] = htier == "premium"
         if tier == "free" and htier == "premium":
             h_copy["locked"] = True
             h_copy["original_name"] = h_copy["name"]

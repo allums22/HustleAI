@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  ActivityIndicator, RefreshControl, Modal,
+  ActivityIndicator, RefreshControl, Modal, TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,6 +16,8 @@ export default function HustlesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'starter' | 'premium'>('all');
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [industryQuery, setIndustryQuery] = useState('');
+  const [industryLoading, setIndustryLoading] = useState(false);
 
   const loadHustles = useCallback(async () => {
     try {
@@ -41,13 +43,48 @@ export default function HustlesScreen() {
     }
   };
 
+  const handleIndustrySearch = async () => {
+    if (!industryQuery.trim() || industryLoading) return;
+    setIndustryLoading(true);
+    try {
+      const res = await api.generateIndustryHustles(industryQuery.trim());
+      setIndustryQuery('');
+      await loadHustles();
+    } catch (e: any) {
+      alert(e.message || 'Failed to generate');
+    } finally {
+      setIndustryLoading(false);
+    }
+  };
+
   if (loading) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={Colors.trustBlue} /></View>;
 
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <Text style={styles.title}>My Side Hustles</Text>
-        <Text style={styles.subtitle}>{hustles.filter(h => !h.locked).length} unlocked · {hustles.filter(h => h.locked).length} premium</Text>
+        <Text style={styles.subtitle}>{hustles.length} total · {hustles.filter(h => h.is_premium).length} premium · {hustles.filter(h => !h.is_premium).length} starter</Text>
+      </View>
+
+      {/* Industry Search */}
+      <View style={styles.industryBar}>
+        <TextInput
+          style={styles.industryInput}
+          placeholder="Request hustles in a specific industry..."
+          placeholderTextColor={Colors.textTertiary}
+          value={industryQuery}
+          onChangeText={setIndustryQuery}
+          onSubmitEditing={handleIndustrySearch}
+          returnKeyType="search"
+        />
+        <TouchableOpacity
+          style={[styles.industryBtn, (!industryQuery.trim() || industryLoading) && { opacity: 0.5 }]}
+          onPress={handleIndustrySearch}
+          disabled={!industryQuery.trim() || industryLoading}
+          activeOpacity={0.7}
+        >
+          {industryLoading ? <ActivityIndicator color="#000" size="small" /> : <Ionicons name="search" size={18} color="#000" />}
+        </TouchableOpacity>
       </View>
 
       <View style={styles.filterRow}>
@@ -158,7 +195,10 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 24, paddingTop: 16, maxWidth: 1000, alignSelf: 'center', width: '100%' },
   title: { fontSize: 24, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.5 },
   subtitle: { fontSize: 14, color: Colors.textSecondary, marginTop: 2 },
-  filterRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 24, marginTop: 16, marginBottom: 12, maxWidth: 1000, alignSelf: 'center', width: '100%' },
+  filterRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 24, marginTop: 8, marginBottom: 12, maxWidth: 1000, alignSelf: 'center', width: '100%' },
+  industryBar: { flexDirection: 'row', gap: 8, paddingHorizontal: 24, paddingVertical: 8, maxWidth: 1000, alignSelf: 'center', width: '100%' },
+  industryInput: { flex: 1, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: Colors.textPrimary },
+  industryBtn: { width: 48, height: 48, borderRadius: 12, backgroundColor: Colors.gold, justifyContent: 'center', alignItems: 'center' },
   filterBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
   filterBtnActive: { backgroundColor: Colors.trustBlue, borderColor: Colors.trustBlue },
   filterText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
