@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -132,7 +132,7 @@ export default function BetaInviteScreen() {
 
           <View style={s.signOff}>
             <Text style={s.thanks}>With gratitude,</Text>
-            <Text style={s.signature}>James Adrian Allums</Text>
+            <Image source={{ uri: 'https://customer-assets.emergentagent.com/job_skill-match-hustle/artifacts/ac8ho2yf_signature%20%281%29.png' }} style={s.signatureImg} resizeMode="contain" />
             <Text style={s.founderTitle}>Founder, nexus28</Text>
           </View>
 
@@ -175,7 +175,7 @@ const s = StyleSheet.create({
   expectDesc: { fontSize: 13, color: Colors.textTertiary, lineHeight: 19 },
   signOff: { marginTop: 24 },
   thanks: { fontSize: 14, color: Colors.textSecondary, marginBottom: 12 },
-  signature: { fontSize: 22, fontWeight: '900', color: Colors.textPrimary, fontStyle: 'italic' },
+  signatureImg: { width: 200, height: 80, marginVertical: 4 },
   founderTitle: { fontSize: 13, color: Colors.textTertiary, marginTop: 4 },
   domainText: { fontSize: 12, color: Colors.textTertiary, textAlign: 'center', letterSpacing: 1 },
   ctaBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: Colors.gold, paddingVertical: 18, borderRadius: 14, marginTop: 24 },
