@@ -133,4 +133,26 @@ export const api = {
   submitFeedback: (data: { category: string; rating: number; message: string }) =>
     request('/api/beta/feedback', { method: 'POST', body: JSON.stringify(data) }),
   getFeedback: () => request('/api/beta/feedback'),
+
+  // 🚀 BREAKOUT FEATURES
+  // Live Activity Feed
+  getLiveActivity: () => request('/api/activity/live'),
+  // Leaderboard
+  getLeaderboard: () => request('/api/leaderboard'),
+  // Daily Check-In Coach
+  dailyCheckin: (data: { feeling: string; blocker?: string }) =>
+    request('/api/coach/checkin', { method: 'POST', body: JSON.stringify(data) }),
+  getTodayCheckin: () => request('/api/coach/checkin/today'),
+  // Shareable Scorecard
+  generateScorecard: () => request('/api/scorecard/generate', { method: 'POST' }),
+  getMyScorecard: () => request('/api/scorecard/mine'),
+  getPublicScorecard: (id: string) =>
+    fetch(`${BACKEND_URL}/api/scorecard/public/${id}`).then(r => { if (!r.ok) throw new Error('Not found'); return r.json(); }),
+  // First $100 Challenge
+  getFirst100: () => request('/api/challenges/first-100'),
+  // Pause / Resume
+  pauseHustle: (hustleId: string, reason?: string) =>
+    request(`/api/hustles/${hustleId}/pause`, { method: 'POST', body: JSON.stringify({ reason: reason || '' }) }),
+  resumeHustle: (hustleId: string) =>
+    request(`/api/hustles/${hustleId}/resume`, { method: 'POST' }),
 };

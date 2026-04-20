@@ -1717,6 +1717,284 @@ async def get_public_stats():
     kit_count = await db.launch_kits.count_documents({})
     return {"users": user_count, "hustles": hustle_count, "plans": plan_count, "kits": kit_count}
 
+# ─── 🚀 BREAKOUT FEATURES ───
+
+# 1) LIVE ACTIVITY FEED — anonymized recent wins for social proof
+@api_router.get("/activity/live")
+async def get_live_activity():
+    """Public social-proof feed. Returns last 30 earnings + completions + signups (anonymized)."""
+    activities = []
+    # Recent earnings
+    earnings = await db.earnings.find({}, {"_id": 0}).sort("created_at", -1).to_list(20)
+    for e in earnings:
+        user = await db.users.find_one({"user_id": e.get("user_id")}, {"_id": 0, "name": 1})
+        if not user:
+            continue
+        name = (user.get("name", "Someone") or "Someone").split(" ")[0]
+        initial = name[:1].upper() + "."
+        # Try to get hustle name
+        h = await db.side_hustles.find_one({"hustle_id": e.get("hustle_id", "")}, {"_id": 0, "name": 1})
+        activities.append({
+            "type": "earning",
+            "text": f"{name[0]}{initial[0] if len(initial)>1 else ''}. just earned ${e.get('amount', 0):.0f}" + (f" from {h['name'][:30]}" if h else ""),
+            "emoji": "💰",
+            "amount": e.get("amount", 0),
+            "created_at": e.get("created_at", ""),
+        })
+    # Recent community posts
+    posts = await db.community_posts.find({}, {"_id": 0}).sort("created_at", -1).to_list(10)
+    for p in posts:
+        name = (p.get("author_name", "Someone") or "Someone").split(" ")[0]
+        text = f"{name} shared: {p.get('content', '')[:60]}"
+        if p.get("milestone"):
+            text = f"{name} hit milestone: {p['milestone']}"
+        activities.append({
+            "type": "post",
+            "text": text + ("..." if len(p.get("content", "")) > 60 else ""),
+            "emoji": "🎉",
+            "created_at": p.get("created_at", ""),
+        })
+    # Recent signups (last 48 hrs)
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat()
+    recent_users = await db.users.find({"created_at": {"$gte": cutoff}}, {"_id": 0, "name": 1, "created_at": 1}).sort("created_at", -1).to_list(5)
+    for u in recent_users:
+        name = (u.get("name", "Someone") or "Someone").split(" ")[0]
+        activities.append({
+            "type": "signup",
+            "text": f"{name} just joined HustleAI",
+            "emoji": "🚀",
+            "created_at": u.get("created_at", ""),
+        })
+    # Sort by time and return top 20
+    activities.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    return {"activities": activities[:20]}
+
+
+# 2) MONTHLY LEADERBOARD — top earners this month (competitive retention)
+@api_router.get("/leaderboard")
+async def get_leaderboard(user: dict = Depends(get_current_user)):
+    """Returns top 10 earners this month with tier, total, and rank."""
+    this_month = datetime.now(timezone.utc).strftime("%Y-%m")
+    # Aggregate earnings this month per user
+    pipeline = [
+        {"$match": {"date": {"$regex": f"^{this_month}"}}},
+        {"$group": {"_id": "$user_id", "total": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+        {"$sort": {"total": -1}},
+        {"$limit": 20},
+    ]
+    results = await db.earnings.aggregate(pipeline).to_list(20)
+    board = []
+    user_rank = None
+    for rank, r in enumerate(results, start=1):
+        u = await db.users.find_one({"user_id": r["_id"]}, {"_id": 0, "name": 1, "subscription_tier": 1})
+        if not u:
+            continue
+        name = u.get("name", "Anonymous") or "Anonymous"
+        display = name.split(" ")[0] + " " + (name.split(" ")[1][:1].upper() + "." if len(name.split(" ")) > 1 else "")
+        entry = {
+            "rank": rank,
+            "name": display,
+            "tier": u.get("subscription_tier", "free"),
+            "total": round(r["total"], 2),
+            "earnings_count": r["count"],
+            "is_you": r["_id"] == user["user_id"],
+        }
+        board.append(entry)
+        if r["_id"] == user["user_id"]:
+            user_rank = rank
+    # If user not in top 20, get their rank
+    if user_rank is None:
+        user_total = sum(e.get("amount", 0) for e in
+            await db.earnings.find({"user_id": user["user_id"], "date": {"$regex": f"^{this_month}"}}).to_list(200))
+        if user_total > 0:
+            higher = await db.earnings.aggregate([
+                {"$match": {"date": {"$regex": f"^{this_month}"}}},
+                {"$group": {"_id": "$user_id", "total": {"$sum": "$amount"}}},
+                {"$match": {"total": {"$gt": user_total}}},
+                {"$count": "cnt"},
+            ]).to_list(1)
+            user_rank = (higher[0]["cnt"] if higher else 0) + 1
+    return {"leaderboard": board[:10], "your_rank": user_rank, "month": this_month}
+
+
+# 3) DAILY AI CHECK-IN COACH — habit formation + personalized nudges
+class CheckinRequest(BaseModel):
+    feeling: str  # "great", "good", "stuck", "overwhelmed"
+    blocker: Optional[str] = ""
+
+@api_router.post("/coach/checkin")
+async def daily_checkin(req: CheckinRequest, user: dict = Depends(get_current_user)):
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # Check if already checked in today
+    existing = await db.checkins.find_one({"user_id": user["user_id"], "date": today})
+    if existing:
+        return {"already_checked_in": True, "response": existing.get("response", ""), "date": today}
+    # Get user context
+    streak_data = await db.task_completions.find({"user_id": user["user_id"]}, {"_id": 0}).to_list(200)
+    hustle = await db.side_hustles.find_one({"user_id": user["user_id"], "selected": True}, {"_id": 0})
+    earnings_total = sum(e.get("amount", 0) for e in await db.earnings.find({"user_id": user["user_id"]}).to_list(500))
+    hustle_name = hustle.get("name", "your hustle") if hustle else "your hustle"
+    # Generate AI response
+    try:
+        chat = LlmChat(api_key=emergent_key,
+            session_id=f"checkin_{user['user_id']}_{today}",
+            system_message=f"""You are a supportive, high-energy daily check-in coach for side hustle entrepreneurs. 
+User: {user.get('name', 'Hustler')} | Hustle: {hustle_name} | Total earned so far: ${earnings_total:.0f} | Task completions: {len(streak_data)}.
+
+The user feels: {req.feeling}. {f"Blocker: {req.blocker}" if req.blocker else ""}
+
+Respond in 2-3 SHORT sentences (max 60 words total). Be specific to their situation, acknowledge their feeling, give ONE concrete action for today. Use plain text only — no markdown, no asterisks. End with a single emoji.""")
+        chat.with_model("openai", "gpt-5.2")
+        response = await chat.send_message(UserMessage(text=f"My check-in: I feel {req.feeling}. {req.blocker}"))
+        clean = re.sub(r'\*{1,3}([^*]+)\*{1,3}', r'\1', response)
+        clean = re.sub(r'`([^`]+)`', r'\1', clean).strip()
+    except Exception as e:
+        logger.error(f"Checkin AI error: {e}")
+        clean = f"You've got this! Focus on one thing today — even 15 minutes moves you forward. 💪"
+    await db.checkins.insert_one({
+        "user_id": user["user_id"], "date": today, "feeling": req.feeling,
+        "blocker": req.blocker, "response": clean,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"already_checked_in": False, "response": clean, "date": today}
+
+@api_router.get("/coach/checkin/today")
+async def get_today_checkin(user: dict = Depends(get_current_user)):
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    c = await db.checkins.find_one({"user_id": user["user_id"], "date": today}, {"_id": 0})
+    return {"checked_in": c is not None, "checkin": c}
+
+
+# 4) SHAREABLE PUBLIC SCORECARD — viral growth loop
+@api_router.post("/scorecard/generate")
+async def generate_scorecard(user: dict = Depends(get_current_user)):
+    """Create a shareable public scorecard from user's quiz + results. Returns scorecard_id."""
+    qr = await db.questionnaire_responses.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    hustles = await db.side_hustles.find({"user_id": user["user_id"]}, {"_id": 0}).limit(12).to_list(12)
+    if not qr or not hustles:
+        raise HTTPException(status_code=400, detail="Complete the questionnaire first")
+    # Generate personality type
+    answers = qr.get("answers", {})
+    skills = answers.get("skills", [])
+    hours = answers.get("hours_per_week", "10-20")
+    goal = answers.get("income_goal", "$1000-$3000")
+    risk = answers.get("risk_tolerance", "Medium - Balanced approach")
+    # Derive archetype
+    if "Creative" in str(skills) or "Design" in str(skills):
+        archetype = "Creative Hustler"
+        archetype_emoji = "🎨"
+        archetype_desc = "Your superpower is turning ideas into income."
+    elif "Technical" in str(skills) or "Tech" in str(skills):
+        archetype = "Tech Builder"
+        archetype_emoji = "💻"
+        archetype_desc = "You solve real problems with code and systems."
+    elif "Trade" in str(skills) or "Physical" in str(skills) or answers.get("blue_collar"):
+        archetype = "Skilled Craftsperson"
+        archetype_emoji = "🔨"
+        archetype_desc = "Your hands-on skills are in high demand."
+    elif "Sales" in str(skills) or "Marketing" in str(skills):
+        archetype = "People Connector"
+        archetype_emoji = "🤝"
+        archetype_desc = "You turn relationships into revenue."
+    else:
+        archetype = "Opportunity Spotter"
+        archetype_emoji = "🎯"
+        archetype_desc = "You see value where others see obstacles."
+    scorecard_id = f"sc_{uuid.uuid4().hex[:10]}"
+    top_hustles = [{"name": h.get("name", ""), "category": h.get("category", ""),
+                     "potential_income": h.get("potential_income", "")} for h in hustles[:3]]
+    scorecard = {
+        "scorecard_id": scorecard_id,
+        "user_id": user["user_id"],
+        "user_name_first": (user.get("name", "Hustler") or "Hustler").split(" ")[0],
+        "archetype": archetype,
+        "archetype_emoji": archetype_emoji,
+        "archetype_desc": archetype_desc,
+        "hours_per_week": hours,
+        "income_goal": goal,
+        "risk_tolerance": risk,
+        "top_hustles": top_hustles,
+        "total_hustles": len(hustles),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "views": 0,
+        "signups_from": 0,
+    }
+    await db.scorecards.update_one(
+        {"user_id": user["user_id"]}, {"$set": scorecard}, upsert=True)
+    return {"scorecard_id": scorecard_id, "archetype": archetype,
+            "share_url_path": f"/s/{scorecard_id}"}
+
+@api_router.get("/scorecard/public/{scorecard_id}")
+async def get_public_scorecard(scorecard_id: str):
+    """NO AUTH — public endpoint for viral sharing."""
+    sc = await db.scorecards.find_one({"scorecard_id": scorecard_id}, {"_id": 0, "user_id": 0})
+    if not sc:
+        raise HTTPException(status_code=404, detail="Scorecard not found")
+    # Increment view count
+    await db.scorecards.update_one({"scorecard_id": scorecard_id}, {"$inc": {"views": 1}})
+    sc["views"] = sc.get("views", 0) + 1
+    return sc
+
+@api_router.get("/scorecard/mine")
+async def get_my_scorecard(user: dict = Depends(get_current_user)):
+    sc = await db.scorecards.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    return {"scorecard": sc}
+
+
+# 5) FIRST $100 CHALLENGE — activation funnel
+@api_router.get("/challenges/first-100")
+async def first_100_challenge(user: dict = Depends(get_current_user)):
+    """Returns challenge progress toward first $100. Key activation metric."""
+    earnings = await db.earnings.find({"user_id": user["user_id"]}, {"_id": 0}).sort("date", 1).to_list(500)
+    total = sum(e.get("amount", 0) for e in earnings)
+    # Start date = first earning OR user creation
+    user_doc = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0, "created_at": 1})
+    created_str = user_doc.get("created_at", datetime.now(timezone.utc).isoformat()) if user_doc else datetime.now(timezone.utc).isoformat()
+    try:
+        start = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+    except Exception:
+        start = datetime.now(timezone.utc)
+    days_in = (datetime.now(timezone.utc) - start).days
+    days_remaining = max(0, 30 - days_in)
+    percent = min(100, (total / 100) * 100) if total < 100 else 100
+    completed = total >= 100
+    return {
+        "target": 100.00,
+        "current": round(total, 2),
+        "percent": round(percent),
+        "completed": completed,
+        "days_in": days_in,
+        "days_remaining": days_remaining,
+        "first_earning_date": earnings[0].get("date") if earnings else None,
+        "earnings_count": len(earnings),
+        "message": (
+            "🎉 You crushed it! First $100 unlocked — you're officially a hustler." if completed
+            else f"${100 - total:.2f} to go — you've got {days_remaining} days. Log your first win to break the seal!"
+            if total == 0 else
+            f"${100 - total:.2f} away from your first $100. Keep the momentum!"
+        ),
+    }
+
+
+# 6) PAUSE / RESUME / SWAP HUSTLE — retention recovery
+class HustleStatusReq(BaseModel):
+    reason: Optional[str] = ""
+
+@api_router.post("/hustles/{hustle_id}/pause")
+async def pause_hustle(hustle_id: str, req: HustleStatusReq, user: dict = Depends(get_current_user)):
+    await db.side_hustles.update_one(
+        {"hustle_id": hustle_id, "user_id": user["user_id"]},
+        {"$set": {"status": "paused", "paused_at": datetime.now(timezone.utc).isoformat(),
+                   "pause_reason": req.reason}})
+    return {"status": "ok", "message": "Plan paused. Resume anytime — we saved your progress. 💙"}
+
+@api_router.post("/hustles/{hustle_id}/resume")
+async def resume_hustle(hustle_id: str, user: dict = Depends(get_current_user)):
+    await db.side_hustles.update_one(
+        {"hustle_id": hustle_id, "user_id": user["user_id"]},
+        {"$set": {"status": "active"}, "$unset": {"paused_at": "", "pause_reason": ""}})
+    return {"status": "ok", "message": "Welcome back! You've got this. 🚀"}
+
 app.include_router(api_router)
 app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 

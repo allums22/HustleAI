@@ -13,7 +13,10 @@ const tierColors: Record<string, string> = { free: Colors.textTertiary, starter:
 
 export default function CommunityScreen() {
   const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<'wins' | 'leaderboard'>('wins');
   const [posts, setPosts] = useState<any[]>([]);
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [yourRank, setYourRank] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showPostModal, setShowPostModal] = useState(false);
@@ -22,8 +25,15 @@ export default function CommunityScreen() {
   const [amount, setAmount] = useState('');
 
   const loadPosts = useCallback(async () => {
-    try { const res = await api.getCommunityPosts(); setPosts(res.posts || []); }
-    catch (e) { console.error(e); }
+    try {
+      const [postsRes, lbRes] = await Promise.all([
+        api.getCommunityPosts(),
+        api.getLeaderboard().catch(() => ({ leaderboard: [], your_rank: null })),
+      ]);
+      setPosts(postsRes.posts || []);
+      setLeaderboard(lbRes.leaderboard || []);
+      setYourRank(lbRes.your_rank);
+    } catch (e) { console.error(e); }
     finally { setLoading(false); setRefreshing(false); }
   }, []);
 
@@ -64,7 +74,52 @@ export default function CommunityScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadPosts(); }} />}>
-        {posts.length === 0 ? (
+
+        {/* Tab Toggle: Wins / Leaderboard */}
+        <View style={s.tabRow}>
+          <TouchableOpacity testID="tab-wins" style={[s.tabBtn, activeTab === 'wins' && s.tabBtnActive]} onPress={() => setActiveTab('wins')}>
+            <Ionicons name="megaphone-outline" size={16} color={activeTab === 'wins' ? Colors.background : Colors.textSecondary} />
+            <Text style={[s.tabTxt, activeTab === 'wins' && s.tabTxtActive]}>Wins</Text>
+          </TouchableOpacity>
+          <TouchableOpacity testID="tab-leaderboard" style={[s.tabBtn, activeTab === 'leaderboard' && s.tabBtnActive]} onPress={() => setActiveTab('leaderboard')}>
+            <Ionicons name="trophy-outline" size={16} color={activeTab === 'leaderboard' ? Colors.background : Colors.textSecondary} />
+            <Text style={[s.tabTxt, activeTab === 'leaderboard' && s.tabTxtActive]}>Leaderboard</Text>
+          </TouchableOpacity>
+        </View>
+
+        {activeTab === 'leaderboard' ? (
+          <>
+            <View style={s.lbHeader}>
+              <Text style={s.lbMonth}>This Month's Top Earners</Text>
+              {yourRank && <View style={s.lbRankBadge}><Text style={s.lbRankText}>You're #{yourRank}</Text></View>}
+            </View>
+            {leaderboard.length === 0 ? (
+              <View style={s.empty}>
+                <Ionicons name="trophy-outline" size={48} color={Colors.textTertiary} />
+                <Text style={s.emptyTitle}>Be the first to log earnings this month</Text>
+                <Text style={s.emptyText}>Track your income and climb the board</Text>
+              </View>
+            ) : leaderboard.map((entry) => (
+              <View key={entry.rank} style={[s.lbRow, entry.is_you && s.lbRowYou]}>
+                <View style={[s.lbRankCircle, entry.rank === 1 && s.lbGold, entry.rank === 2 && s.lbSilver, entry.rank === 3 && s.lbBronze]}>
+                  <Text style={[s.lbRankNum, entry.rank <= 3 && s.lbRankNumTop]}>
+                    {entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : `#${entry.rank}`}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.lbName}>{entry.name}{entry.is_you ? ' (you)' : ''}</Text>
+                  <View style={[s.lbTier, { backgroundColor: (tierColors[entry.tier] || Colors.textTertiary) + '20' }]}>
+                    <Text style={[s.lbTierText, { color: tierColors[entry.tier] || Colors.textTertiary }]}>{entry.tier}</Text>
+                  </View>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={s.lbTotal}>${entry.total.toFixed(0)}</Text>
+                  <Text style={s.lbCount}>{entry.earnings_count} wins</Text>
+                </View>
+              </View>
+            ))}
+          </>
+        ) : posts.length === 0 ? (
           <View style={s.empty}>
             <Ionicons name="chatbubbles-outline" size={48} color={Colors.textTertiary} />
             <Text style={s.emptyTitle}>Be the first to share!</Text>
@@ -188,4 +243,28 @@ const s = StyleSheet.create({
   submitBtn: { backgroundColor: Colors.gold, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
   submitBtnDisabled: { opacity: 0.5 },
   submitBtnText: { fontSize: 16, fontWeight: '700', color: Colors.background },
+  // Tabs
+  tabRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  tabBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
+  tabBtnActive: { backgroundColor: Colors.gold, borderColor: Colors.gold },
+  tabTxt: { fontSize: 13, fontWeight: '700', color: Colors.textSecondary },
+  tabTxtActive: { color: Colors.background },
+  // Leaderboard
+  lbHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  lbMonth: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
+  lbRankBadge: { backgroundColor: Colors.orangeLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  lbRankText: { fontSize: 12, fontWeight: '800', color: Colors.gold },
+  lbRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.surface, borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: Colors.border },
+  lbRowYou: { borderColor: Colors.gold, backgroundColor: Colors.orangeLight + '40' },
+  lbRankCircle: { width: 42, height: 42, borderRadius: 21, backgroundColor: Colors.surfaceElevated, justifyContent: 'center', alignItems: 'center' },
+  lbGold: { backgroundColor: '#fef3c7' },
+  lbSilver: { backgroundColor: '#e5e7eb' },
+  lbBronze: { backgroundColor: '#fed7aa' },
+  lbRankNum: { fontSize: 13, fontWeight: '800', color: Colors.textSecondary },
+  lbRankNumTop: { fontSize: 20 },
+  lbName: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
+  lbTier: { alignSelf: 'flex-start', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginTop: 2 },
+  lbTierText: { fontSize: 9, fontWeight: '700', textTransform: 'uppercase' },
+  lbTotal: { fontSize: 16, fontWeight: '800', color: Colors.gold },
+  lbCount: { fontSize: 10, color: Colors.textTertiary },
 });

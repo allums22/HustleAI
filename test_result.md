@@ -394,18 +394,30 @@ metadata:
   test_sequence: 1
   run_ui: false
 
+  - task: "BREAKOUT Features Backend (Live Activity, Leaderboard, Daily Check-In, Scorecard, First $100, Pause/Resume)"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+        - agent: "main"
+        - comment: "Added 9 new breakout endpoints designed to 50%+ the success probability: (1) GET /api/activity/live (public, no auth — anonymized earnings/posts/signups for social proof), (2) GET /api/leaderboard (top 10 monthly earners + your_rank), (3) POST /api/coach/checkin (AI-powered daily check-in using GPT-5.2, feeling + optional blocker, returns personalized response, deduped by date), (4) GET /api/coach/checkin/today (has user checked in today?), (5) POST /api/scorecard/generate (creates public shareable scorecard with archetype), (6) GET /api/scorecard/public/{id} (NO AUTH — viral endpoint), (7) GET /api/scorecard/mine, (8) GET /api/challenges/first-100 (activation tracker), (9) POST /api/hustles/{id}/pause + /resume (retention recovery). All endpoints verified working via curl tests. Test with Empire token sess_02b7e25f5bf24900abc602309216532a."
+        - working: true
+        - agent: "testing"
+        - comment: "✅ BREAKOUT SUITE FULL PASS — 14/14 tests (11 breakout + 3 regression) against https://skill-match-hustle.preview.emergentagent.com/api with Empire token. DETAILS: (1) GET /api/activity/live (no auth) → 200 OK, 13 activities with all types {earning, post, signup}, schema {type,text,emoji,created_at} valid, sorted newest-first. (2) GET /api/leaderboard → 200 OK, month=2026-04, your_rank=1, top entry {rank:1, name:'Adrian A.', tier:'empire', total:600.0, earnings_count:2, is_you:true} ✅ Adrian #1 with $600 confirmed. (3) GET /api/coach/checkin/today → 200 OK {checked_in, checkin}. POST /api/coach/checkin → 200 OK, REAL GPT-5.2 RESPONSE (not fallback): 40 words, no markdown, personalized reference to Adrian by name, concrete action (5 outreach messages to local service businesses), ends with emoji. date=2026-04-20, already_checked_in=false. (4) POST again immediately → already_checked_in=true with identical response (dedup working). (5) POST /api/scorecard/generate → 200 OK scorecard_id=sc_9bab50ce11, archetype='Skilled Craftsperson', share_url_path='/s/sc_9bab50ce11'. GET /api/scorecard/public/sc_9bab50ce11 (NO AUTH) → 200 OK, user_id properly hidden, all required fields present {scorecard_id, user_name_first:'Adrian', archetype, archetype_emoji:'🔨', archetype_desc, hours_per_week, income_goal, top_hustles[3], views}, views increment verified 1→2 on repeat call. GET /api/scorecard/mine → 200 OK with matching scorecard. (6) GET /api/challenges/first-100 → 200 OK {target:100.0, current:600.0, percent:100, completed:true, days_in:3, days_remaining:27, first_earning_date:'2026-04-17', earnings_count:2, message:'🎉 You crushed it! First $100 unlocked — you're officially a hustler.'}. (7) POST /api/hustles/hustle_704f65442468/pause → 200 OK {status:ok, message:'Plan paused. Resume anytime — we saved your progress. 💙'}. POST /resume → 200 OK {status:ok, message:'Welcome back! You've got this. 🚀'}. REGRESSION: GET /api/profile still returns empire tier ✅; GET /api/earnings/summary still returns total=600.0 this_month=600.0 count=2 ✅; GET /api/achievements still returns 12 badges with 7 unlocked ✅. ALL ENDPOINTS FULLY FUNCTIONAL AND PRODUCTION READY."
+
 test_plan:
-  current_focus:
-    - "Income Tracker endpoints (log/summary)"
-    - "Daily Task endpoints (daily-task/complete)"
-    - "Achievements endpoint with auto-unlock"
-    - "Streak + Motivation endpoints"
-    - "Community Posts + Reactions"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
+    - agent: "testing"
+    - message: "✅ BREAKOUT SUITE — FULL BACKEND PASS (14/14 = 11 breakout endpoints + 3 regression). Tested against https://skill-match-hustle.preview.emergentagent.com/api with Empire token sess_02b7e25f5bf24900abc602309216532a. KEY HIGHLIGHTS: (a) Public /api/activity/live (NO AUTH) returned 13 activities with all 3 types {earning, post, signup}, correct schema, sorted newest-first — ready for social proof widget. (b) /api/leaderboard confirmed Adrian A. #1 with $600 (tier empire, earnings_count=2, is_you=true) for month 2026-04. (c) AI Check-In Coach: POST /api/coach/checkin returned a REAL GPT-5.2 response (not fallback) — 40 words, no markdown, personalized by name, concrete action (5 outreach messages to local service businesses), ends with single emoji. Dedup confirmed — immediate second POST returned already_checked_in:true with identical response. Backend logs confirm LiteLLM openai/gpt-5.2 call completed. (d) Public scorecard (CRITICAL viral endpoint): sc_9bab50ce11 generated, archetype='Skilled Craftsperson', share_url_path='/s/sc_9bab50ce11'. GET /api/scorecard/public/{id} with NO auth succeeded, user_id properly stripped, all required fields present including user_name_first='Adrian', top_hustles=3, archetype_emoji='🔨'. Views incremented 1→2 on repeat call ✅. (e) /api/challenges/first-100 showed completed:true, current=600, percent=100, earnings_count=2, first_earning_date=2026-04-17, days_in=3, days_remaining=27. (f) Pause/Resume on hustle_704f65442468 both returned {status:ok} with warm messages. (g) Regression all green: profile=empire tier, earnings total=600, achievements=12 badges (7 unlocked). NO FAILURES. Main agent can summarize and finish."
     - agent: "main"
     - message: "RETENTION 10/10 PUSH: Surfaced backend-existing retention systems in the UI. Dashboard now shows Earnings Snapshot (today/week/month/total) + Today's Tasks preview with 1-tap complete. Profile now shows Achievements Grid (12 badges, 3-col, gold when unlocked, locked shows padlock). Progress page's Log Earning now prompts user to share the win to Community (social proof loop). All backend endpoints already exist and return 200 OK in logs. Please test the retention endpoints: /api/income/log, /api/income/summary, /api/daily-task, /api/daily-task/complete, /api/tasks/streak, /api/tasks/{hustle_id}/complete, /api/tasks/{hustle_id}/progress, /api/earnings/log, /api/earnings/summary, /api/achievements (must auto-unlock), /api/community/posts, /api/community/posts/{id}/react, /api/motivation/daily. Use Empire session token sess_02b7e25f5bf24900abc602309216532a. Also ensure no regressions in previously-working endpoints."
     - agent: "testing"

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  ActivityIndicator, RefreshControl,
+  ActivityIndicator, RefreshControl, Modal, TextInput, Platform, Share,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,6 +23,14 @@ export default function DashboardScreen() {
   const [earningsSummary, setEarningsSummary] = useState<any>(null);
   const [todayTasks, setTodayTasks] = useState<any[]>([]);
   const [todayHustleId, setTodayHustleId] = useState<string>('');
+  const [liveActivity, setLiveActivity] = useState<any[]>([]);
+  const [first100, setFirst100] = useState<any>(null);
+  const [showCheckin, setShowCheckin] = useState(false);
+  const [checkinFeeling, setCheckinFeeling] = useState<string>('');
+  const [checkinBlocker, setCheckinBlocker] = useState<string>('');
+  const [checkinResponse, setCheckinResponse] = useState<string>('');
+  const [checkinLoading, setCheckinLoading] = useState(false);
+  const [scorecardId, setScorecardId] = useState<string>('');
 
   const loadData = useCallback(async () => {
     try {
@@ -50,6 +58,22 @@ export default function DashboardScreen() {
         setMotivation(motRes);
         setStreak(streakRes);
         setEarningsSummary(earnRes);
+      } catch {}
+      // Load breakout features: live activity, first-100 challenge, check-in status, scorecard
+      try {
+        const [liveRes, f100Res, checkinRes, scRes] = await Promise.all([
+          api.getLiveActivity().catch(() => ({ activities: [] })),
+          api.getFirst100().catch(() => null),
+          api.getTodayCheckin().catch(() => ({ checked_in: true })),
+          api.getMyScorecard().catch(() => ({ scorecard: null })),
+        ]);
+        setLiveActivity(liveRes.activities || []);
+        setFirst100(f100Res);
+        // Auto-prompt check-in once per day
+        if (!checkinRes.checked_in) {
+          setTimeout(() => setShowCheckin(true), 1500);
+        }
+        setScorecardId(scRes?.scorecard?.scorecard_id || '');
       } catch {}
       // Load today's top 3 incomplete tasks from first selected hustle with a plan
       try {
@@ -91,6 +115,45 @@ export default function DashboardScreen() {
       const [streakRes, motRes] = await Promise.all([api.getStreak(), api.getDailyMotivation()]);
       setStreak(streakRes); setMotivation(motRes);
     } catch (e) { console.error(e); }
+  };
+
+  const handleSubmitCheckin = async (feeling: string) => {
+    setCheckinLoading(true);
+    setCheckinFeeling(feeling);
+    try {
+      const res = await api.dailyCheckin({ feeling, blocker: checkinBlocker });
+      setCheckinResponse(res.response || "Keep going! You've got this. 💪");
+    } catch (e: any) {
+      setCheckinResponse("You've got this! Even 15 minutes today moves you forward. 💪");
+    } finally {
+      setCheckinLoading(false);
+    }
+  };
+
+  const handleShareScorecard = async () => {
+    try {
+      let scId = scorecardId;
+      if (!scId) {
+        const res = await api.generateScorecard();
+        scId = res.scorecard_id;
+        setScorecardId(scId);
+      }
+      const origin = Platform.OS === 'web' ? window.location.origin : 'https://hustleai.live';
+      const url = `${origin}/s/${scId}`;
+      const msg = `Check out my HustleAI archetype! 🚀 Take the 2-min quiz and find yours:\n${url}`;
+      if (Platform.OS === 'web') {
+        if ((navigator as any).share) {
+          await (navigator as any).share({ title: 'My HustleAI Scorecard', text: msg, url });
+        } else {
+          await navigator.clipboard.writeText(msg);
+          alert('Share link copied to clipboard!');
+        }
+      } else {
+        await Share.share({ message: msg, url });
+      }
+    } catch (e: any) {
+      alert(e.message || 'Could not generate scorecard. Complete the questionnaire first.');
+    }
   };
 
   useEffect(() => {
@@ -172,6 +235,42 @@ export default function DashboardScreen() {
                 <Text style={styles.motivationBtnText}>Start Today's Tasks</Text>
                 <Ionicons name="arrow-forward" size={14} color={Colors.background} />
               </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* 🎯 First $100 Challenge */}
+        {first100 && !first100.completed && (
+          <View style={styles.challengeCard}>
+            <View style={styles.challengeHeader}>
+              <Text style={styles.challengeEmoji}>🎯</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.challengeTitle}>First $100 Challenge</Text>
+                <Text style={styles.challengeSub}>{first100.message}</Text>
+              </View>
+              <View style={styles.challengeDaysPill}>
+                <Text style={styles.challengeDays}>{first100.days_remaining}d</Text>
+                <Text style={styles.challengeDaysLabel}>left</Text>
+              </View>
+            </View>
+            <View style={styles.challengeBar}>
+              <View style={[styles.challengeFill, { width: `${first100.percent}%` }]} />
+            </View>
+            <View style={styles.challengeFooter}>
+              <Text style={styles.challengeAmount}>${first100.current.toFixed(0)} / $100</Text>
+              <TouchableOpacity testID="log-win-btn" onPress={() => router.push('/(tabs)/progress')}>
+                <Text style={styles.challengeLogLink}>Log a Win →</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {first100?.completed && (
+          <View style={styles.challengeDoneCard}>
+            <Text style={styles.challengeEmoji}>🏆</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.challengeDoneTitle}>First $100 Unlocked!</Text>
+              <Text style={styles.challengeDoneSub}>${first100.current.toFixed(0)} earned in {first100.days_in} days — you're officially a hustler.</Text>
             </View>
           </View>
         )}
@@ -374,6 +473,41 @@ export default function DashboardScreen() {
           )}
         </View>
 
+        {/* 🔴 Live Activity Feed — Social Proof */}
+        {liveActivity.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={styles.livePulse} />
+                <Text style={styles.sectionTitle}>Live Activity</Text>
+              </View>
+              <TouchableOpacity onPress={() => router.push('/(tabs)/community')}>
+                <Text style={styles.seeAll}>Community →</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.liveCard}>
+              {liveActivity.slice(0, 5).map((a, i) => (
+                <View key={i} style={[styles.liveRow, i > 0 && styles.liveRowBorder]}>
+                  <Text style={styles.liveEmoji}>{a.emoji}</Text>
+                  <Text style={styles.liveText} numberOfLines={2}>{a.text}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* 📲 Share Scorecard CTA */}
+        <TouchableOpacity testID="share-scorecard-dashboard" style={styles.scorecardBanner} onPress={handleShareScorecard} activeOpacity={0.85}>
+          <View style={styles.scorecardIconBox}>
+            <Text style={{ fontSize: 28 }}>🎯</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.scorecardTitle}>Share Your Hustle Archetype</Text>
+            <Text style={styles.scorecardDesc}>Show friends what HustleAI discovered about you</Text>
+          </View>
+          <Ionicons name="share-social" size={22} color={Colors.gold} />
+        </TouchableOpacity>
+
         {/* Upgrade CTA */}
         {tier === 'free' && (
           <TouchableOpacity
@@ -391,6 +525,53 @@ export default function DashboardScreen() {
         )}
         <View style={{ height: 20 }} />
       </ScrollView>
+
+      {/* 🤖 Daily AI Check-In Modal */}
+      <Modal visible={showCheckin} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.checkinCard}>
+            <TouchableOpacity testID="checkin-close" style={styles.checkinClose} onPress={() => setShowCheckin(false)}>
+              <Ionicons name="close" size={22} color={Colors.textSecondary} />
+            </TouchableOpacity>
+            {!checkinResponse ? (
+              <>
+                <Text style={styles.checkinEmoji}>☀️</Text>
+                <Text style={styles.checkinTitle}>Quick Check-In</Text>
+                <Text style={styles.checkinSub}>How are you feeling about today?</Text>
+                <View style={styles.feelingGrid}>
+                  {[
+                    { key: 'great', emoji: '🔥', label: 'Fired up' },
+                    { key: 'good', emoji: '😊', label: 'Ready' },
+                    { key: 'stuck', emoji: '😤', label: 'Stuck' },
+                    { key: 'overwhelmed', emoji: '😮‍💨', label: 'Overwhelmed' },
+                  ].map(f => (
+                    <TouchableOpacity
+                      key={f.key}
+                      testID={`feeling-${f.key}`}
+                      style={[styles.feelingBtn, checkinFeeling === f.key && styles.feelingBtnActive]}
+                      onPress={() => handleSubmitCheckin(f.key)}
+                      disabled={checkinLoading}
+                    >
+                      <Text style={styles.feelingEmoji}>{f.emoji}</Text>
+                      <Text style={styles.feelingLabel}>{f.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                {checkinLoading && <ActivityIndicator color={Colors.gold} style={{ marginTop: 16 }} />}
+              </>
+            ) : (
+              <>
+                <Text style={styles.checkinEmoji}>🤖</Text>
+                <Text style={styles.checkinTitle}>Your Coach Says</Text>
+                <Text style={styles.checkinResponse}>{checkinResponse}</Text>
+                <TouchableOpacity testID="checkin-done-btn" style={styles.checkinDoneBtn} onPress={() => { setShowCheckin(false); setCheckinResponse(''); setCheckinFeeling(''); }}>
+                  <Text style={styles.checkinDoneText}>Let's go 🚀</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -468,4 +649,48 @@ const styles = StyleSheet.create({
   taskCheckbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: Colors.gold, marginTop: 2 },
   taskText: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary, lineHeight: 20 },
   taskMeta: { fontSize: 11, color: Colors.textTertiary, marginTop: 3, fontWeight: '500' },
+  // First $100 Challenge
+  challengeCard: { marginHorizontal: 24, marginTop: 12, backgroundColor: Colors.surface, borderRadius: 14, padding: 16, borderWidth: 2, borderColor: Colors.gold + '60', maxWidth: 1000, alignSelf: 'center', width: '100%' },
+  challengeHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  challengeEmoji: { fontSize: 28 },
+  challengeTitle: { fontSize: 15, fontWeight: '800', color: Colors.textPrimary },
+  challengeSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 2, lineHeight: 16 },
+  challengeDaysPill: { alignItems: 'center', backgroundColor: Colors.gold, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
+  challengeDays: { fontSize: 16, fontWeight: '900', color: Colors.background },
+  challengeDaysLabel: { fontSize: 8, fontWeight: '700', color: Colors.background, textTransform: 'uppercase' },
+  challengeBar: { height: 8, backgroundColor: Colors.border, borderRadius: 4, overflow: 'hidden', marginBottom: 8 },
+  challengeFill: { height: '100%', backgroundColor: Colors.gold, borderRadius: 4 },
+  challengeFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  challengeAmount: { fontSize: 13, fontWeight: '800', color: Colors.gold },
+  challengeLogLink: { fontSize: 13, fontWeight: '700', color: Colors.trustBlue },
+  challengeDoneCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 24, marginTop: 12, backgroundColor: Colors.growthGreenLight, borderRadius: 14, padding: 16, maxWidth: 1000, alignSelf: 'center', width: '100%' },
+  challengeDoneTitle: { fontSize: 15, fontWeight: '800', color: Colors.growthGreenText },
+  challengeDoneSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
+  // Live Activity
+  livePulse: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#ef4444' },
+  liveCard: { backgroundColor: Colors.surface, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border },
+  liveRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 14 },
+  liveRowBorder: { borderTopWidth: 1, borderTopColor: Colors.borderLight },
+  liveEmoji: { fontSize: 18 },
+  liveText: { flex: 1, fontSize: 13, color: Colors.textSecondary, fontWeight: '500', lineHeight: 18 },
+  // Scorecard Share Banner
+  scorecardBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 24, marginTop: 12, backgroundColor: Colors.surface, borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: Colors.gold + '50', maxWidth: 1000, alignSelf: 'center', width: '100%' },
+  scorecardIconBox: { width: 48, height: 48, borderRadius: 12, backgroundColor: Colors.orangeLight, justifyContent: 'center', alignItems: 'center' },
+  scorecardTitle: { fontSize: 14, fontWeight: '800', color: Colors.textPrimary },
+  scorecardDesc: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
+  // Check-in Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  checkinCard: { backgroundColor: Colors.surface, borderRadius: 20, padding: 24, width: '100%', maxWidth: 400, alignItems: 'center', borderWidth: 1, borderColor: Colors.border },
+  checkinClose: { position: 'absolute', top: 12, right: 12, padding: 6, zIndex: 10 },
+  checkinEmoji: { fontSize: 48, marginBottom: 8 },
+  checkinTitle: { fontSize: 22, fontWeight: '800', color: Colors.textPrimary, marginBottom: 4 },
+  checkinSub: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', marginBottom: 20 },
+  feelingGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, width: '100%', justifyContent: 'center' },
+  feelingBtn: { width: '46%', alignItems: 'center', padding: 16, borderRadius: 12, backgroundColor: Colors.background, borderWidth: 1.5, borderColor: Colors.border, gap: 6 },
+  feelingBtnActive: { borderColor: Colors.gold, backgroundColor: Colors.orangeLight },
+  feelingEmoji: { fontSize: 28 },
+  feelingLabel: { fontSize: 12, fontWeight: '700', color: Colors.textPrimary },
+  checkinResponse: { fontSize: 15, color: Colors.textPrimary, textAlign: 'center', lineHeight: 22, paddingHorizontal: 8, marginBottom: 20 },
+  checkinDoneBtn: { backgroundColor: Colors.gold, paddingVertical: 14, paddingHorizontal: 32, borderRadius: 12, alignSelf: 'stretch', alignItems: 'center' },
+  checkinDoneText: { fontSize: 15, fontWeight: '800', color: Colors.background },
 });

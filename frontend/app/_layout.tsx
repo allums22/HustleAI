@@ -22,6 +22,7 @@ export default function RootLayout() {
         <Stack.Screen name="plans" />
         <Stack.Screen name="payment-success" />
         <Stack.Screen name="feedback" />
+        <Stack.Screen name="s/[id]" />
       </Stack>
     </AuthProvider>
   );
