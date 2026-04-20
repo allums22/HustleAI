@@ -33,14 +33,44 @@ export default function LaunchPagePreview() {
   const [activeColorField, setActiveColorField] = useState<'primary' | 'accent' | null>(null);
   const [logoUri, setLogoUri] = useState('');
 
-  // Predefined color swatches
-  const COLOR_SWATCHES = [
-    '#6366F1', '#8B5CF6', '#A855F7', '#D946EF', '#EC4899', '#F43F5E',
-    '#EF4444', '#F97316', '#F59E0B', '#FACC15', '#22C55E', '#14B8A6',
-    '#06B6D4', '#0EA5E9', '#3B82F6', '#2563EB', '#7C3AED', '#E11D48',
-    '#DC2626', '#EA580C', '#D97706', '#CA8A04', '#16A34A', '#0D9488',
-    '#0891B2', '#0284C7', '#4F46E5', '#9333EA', '#C026D3', '#DB2777',
-  ];
+  // Color picker helpers
+  const hslToHex = (h: number, s: number, l: number): string => {
+    s /= 100; l /= 100;
+    const k = (n: number) => (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    const toHex = (x: number) => Math.round(255 * x).toString(16).padStart(2, '0');
+    return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`;
+  };
+
+  const [primaryHue, setPrimaryHue] = useState(240);
+  const [primarySat, setPrimarySat] = useState(80);
+  const [primaryLight, setPrimaryLight] = useState(60);
+  const [accentHue, setAccentHue] = useState(330);
+  const [accentSat, setAccentSat] = useState(80);
+  const [accentLight, setAccentLight] = useState(55);
+
+  const handleHueSlider = (field: 'primary' | 'accent', locationX: number, width: number) => {
+    const hue = Math.round(Math.max(0, Math.min(360, (locationX / width) * 360)));
+    if (field === 'primary') {
+      setPrimaryHue(hue);
+      setFormPrimaryColor(hslToHex(hue, primarySat, primaryLight));
+    } else {
+      setAccentHue(hue);
+      setFormAccentColor(hslToHex(hue, accentSat, accentLight));
+    }
+  };
+
+  const handleLightSlider = (field: 'primary' | 'accent', locationX: number, width: number) => {
+    const light = Math.round(Math.max(10, Math.min(90, (locationX / width) * 100)));
+    if (field === 'primary') {
+      setPrimaryLight(light);
+      setFormPrimaryColor(hslToHex(primaryHue, primarySat, light));
+    } else {
+      setAccentLight(light);
+      setFormAccentColor(hslToHex(accentHue, accentSat, light));
+    }
+  };
 
   useEffect(() => { if (id) loadKit(); }, [id]);
 
@@ -185,21 +215,37 @@ export default function LaunchPagePreview() {
                     <View style={[s.colorSwatch, {backgroundColor: formPrimaryColor}]} />
                     <Text style={s.colorHex}>{formPrimaryColor}</Text>
                   </View>
-                  <View style={s.swatchGrid}>
-                    {COLOR_SWATCHES.slice(0, 15).map(c => (
-                      <TouchableOpacity key={`p-${c}`} style={[s.swatchBtn, {backgroundColor: c}, formPrimaryColor === c && s.swatchActive]} onPress={() => setFormPrimaryColor(c)} />
-                    ))}
+                  <Text style={s.sliderLabel}>Hue</Text>
+                  <View style={s.hueBar} onStartShouldSetResponder={() => true}
+                    onResponderGrant={(e) => handleHueSlider('primary', e.nativeEvent.locationX, 280)}
+                    onResponderMove={(e) => handleHueSlider('primary', e.nativeEvent.locationX, 280)}>
+                    <View style={[s.hueThumb, {left: `${(primaryHue / 360) * 100}%`}]} />
+                  </View>
+                  <Text style={s.sliderLabel}>Brightness</Text>
+                  <View style={[s.lightBar, {background: `linear-gradient(to right, #000, hsl(${primaryHue}, ${primarySat}%, 50%), #fff)`} as any]}
+                    onStartShouldSetResponder={() => true}
+                    onResponderGrant={(e) => handleLightSlider('primary', e.nativeEvent.locationX, 280)}
+                    onResponderMove={(e) => handleLightSlider('primary', e.nativeEvent.locationX, 280)}>
+                    <View style={[s.hueThumb, {left: `${primaryLight}%`}]} />
                   </View>
 
-                  <Text style={[s.colorLabel, {marginTop: 16}]}>Accent Color</Text>
+                  <Text style={[s.colorLabel, {marginTop: 20}]}>Accent Color</Text>
                   <View style={s.colorPreviewRow}>
                     <View style={[s.colorSwatch, {backgroundColor: formAccentColor}]} />
                     <Text style={s.colorHex}>{formAccentColor}</Text>
                   </View>
-                  <View style={s.swatchGrid}>
-                    {COLOR_SWATCHES.slice(15).map(c => (
-                      <TouchableOpacity key={`a-${c}`} style={[s.swatchBtn, {backgroundColor: c}, formAccentColor === c && s.swatchActive]} onPress={() => setFormAccentColor(c)} />
-                    ))}
+                  <Text style={s.sliderLabel}>Hue</Text>
+                  <View style={s.hueBar} onStartShouldSetResponder={() => true}
+                    onResponderGrant={(e) => handleHueSlider('accent', e.nativeEvent.locationX, 280)}
+                    onResponderMove={(e) => handleHueSlider('accent', e.nativeEvent.locationX, 280)}>
+                    <View style={[s.hueThumb, {left: `${(accentHue / 360) * 100}%`}]} />
+                  </View>
+                  <Text style={s.sliderLabel}>Brightness</Text>
+                  <View style={[s.lightBar, {background: `linear-gradient(to right, #000, hsl(${accentHue}, ${accentSat}%, 50%), #fff)`} as any]}
+                    onStartShouldSetResponder={() => true}
+                    onResponderGrant={(e) => handleLightSlider('accent', e.nativeEvent.locationX, 280)}
+                    onResponderMove={(e) => handleLightSlider('accent', e.nativeEvent.locationX, 280)}>
+                    <View style={[s.hueThumb, {left: `${accentLight}%`}]} />
                   </View>
                 </View>
 
@@ -273,11 +319,12 @@ const s = StyleSheet.create({
   // Color Picker
   colorLabel: { fontSize: 13, fontWeight: '700', color: Colors.textSecondary },
   colorPreviewRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
-  colorSwatch: { width: 32, height: 32, borderRadius: 8, borderWidth: 2, borderColor: '#333' },
-  colorHex: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary, fontFamily: 'monospace' },
-  swatchGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  swatchBtn: { width: 36, height: 36, borderRadius: 10, borderWidth: 2, borderColor: 'transparent' },
-  swatchActive: { borderColor: '#fff', borderWidth: 3 },
+  colorSwatch: { width: 36, height: 36, borderRadius: 10, borderWidth: 2, borderColor: '#333' },
+  colorHex: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary },
+  sliderLabel: { fontSize: 11, fontWeight: '600', color: Colors.textTertiary, marginBottom: 4, marginTop: 8 },
+  hueBar: { height: 36, borderRadius: 10, overflow: 'hidden', position: 'relative' as any, background: 'linear-gradient(to right, hsl(0,80%,50%), hsl(60,80%,50%), hsl(120,80%,50%), hsl(180,80%,50%), hsl(240,80%,50%), hsl(300,80%,50%), hsl(360,80%,50%))' as any },
+  lightBar: { height: 36, borderRadius: 10, overflow: 'hidden', position: 'relative' as any },
+  hueThumb: { position: 'absolute' as any, top: 2, width: 32, height: 32, borderRadius: 16, backgroundColor: '#fff', borderWidth: 3, borderColor: '#000', marginLeft: -16 },
   // Save
   saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.gold, marginHorizontal: 20, paddingVertical: 16, borderRadius: 14 },
   saveBtnText: { fontSize: 16, fontWeight: '700', color: '#000' },

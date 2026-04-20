@@ -37,10 +37,16 @@ def get_template(variant: int, data: dict) -> str:
     tiers = data.get("pricing_tiers", [])
     logo = bn[0].upper() if bn else "H"
 
-    # Always use curated palette instead of AI-generated colors
-    palette = pick_palette(bn + tg)
-    p = palette["primary"]
-    a = palette["accent"]
+    # Use custom colors if provided, otherwise pick from curated palette
+    custom_primary = data.get("primary", "")
+    custom_accent = data.get("accent", "")
+    if custom_primary and custom_accent and custom_primary.startswith('#') and custom_accent.startswith('#'):
+        p = custom_primary
+        a = custom_accent
+    else:
+        palette = pick_palette(bn + tg)
+        p = palette["primary"]
+        a = palette["accent"]
 
     # Normalize strategies
     normalized_strats = []
