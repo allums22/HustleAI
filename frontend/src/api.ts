@@ -150,6 +150,12 @@ export const api = {
     fetch(`${BACKEND_URL}/api/scorecard/public/${id}`).then(r => { if (!r.ok) throw new Error('Not found'); return r.json(); }),
   // First $100 Challenge
   getFirst100: () => request('/api/challenges/first-100'),
+  // Pricing / checkout with billing + promo
+  createCheckout: (data: { plan: string; origin_url: string; hustle_id?: string; billing?: string; promo_code?: string }) =>
+    request('/api/payments/create-checkout', { method: 'POST', body: JSON.stringify(data) }),
+  validateCheckoutPromo: (code: string) =>
+    request('/api/promo/validate-checkout', { method: 'POST', body: JSON.stringify({ code }) }),
+
   // Pause / Resume
   pauseHustle: (hustleId: string, reason?: string) =>
     request(`/api/hustles/${hustleId}/pause`, { method: 'POST', body: JSON.stringify({ reason: reason || '' }) }),

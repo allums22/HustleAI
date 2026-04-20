@@ -135,11 +135,8 @@ export default function HustleDetailScreen() {
 
   const handleGenerateKit = async () => {
     if (!kitAccess?.has_access && !kitAccess?.kit_exists) {
-      try {
-        let originUrl = Platform.OS === 'web' ? window.location.origin : '';
-        const res = await api.createCheckout('alacarte_kit', originUrl, id);
-        if (res.url) { Platform.OS === 'web' ? (window.location.href = res.url) : Linking.openURL(res.url); }
-      } catch (e: any) { alert(e.message || 'Failed'); }
+      // No individual kit purchase anymore — redirect to pricing to upgrade to Starter
+      router.push('/pricing');
       return;
     }
     setGeneratingKit(true);
@@ -151,11 +148,7 @@ export default function HustleDetailScreen() {
     } catch (e: any) {
       setGeneratingKit(false);
       if (e.message?.includes('Purchase') || e.message?.includes('upgrade')) {
-        try {
-          let originUrl = Platform.OS === 'web' ? window.location.origin : '';
-          const res = await api.createCheckout('alacarte_kit', originUrl, id);
-          if (res.url) { Platform.OS === 'web' ? (window.location.href = res.url) : Linking.openURL(res.url); }
-        } catch {}
+        router.push('/pricing');
       } else { alert(e.message || 'Failed'); }
     }
   };
@@ -163,8 +156,10 @@ export default function HustleDetailScreen() {
   const handlePurchase = async (type: 'alacarte' | 'starter' | 'pro' | 'empire') => {
     setPurchaseLoading(type);
     try {
-      let originUrl = Platform.OS === 'web' ? window.location.origin : '';
-      const res = await api.createCheckout(type, originUrl, type === 'alacarte' ? id : undefined);
+      const originUrl = Platform.OS === 'web' ? window.location.origin : '';
+      const payload: any = { plan: type, origin_url: originUrl };
+      if (type === 'alacarte') payload.hustle_id = id;
+      const res = await api.createCheckout(payload);
       if (res.url) { Platform.OS === 'web' ? (window.location.href = res.url) : Linking.openURL(res.url); }
     } catch (e: any) { alert(e.message || 'Failed'); }
     finally { setPurchaseLoading(''); }

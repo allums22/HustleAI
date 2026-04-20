@@ -47,32 +47,36 @@ api_router = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# ─── 4-Tier Subscription Model ───
+# ─── 4-Tier Subscription Model (with Annual Pricing) ───
+# Annual = ~40% discount (8 months of value at 12-month price = 33% off, round to 40%)
 SUBSCRIPTION_TIERS = {
     "free": {
         "name": "Free", "plan_limit": 0, "launch_kit_limit": 0,
-        "price": 0.00, "description": "Starter hustles + 1 trial business plan",
+        "price": 0.00, "annual_price": 0.00, "description": "Starter hustles + 1 trial business plan",
         "features": ["Up to 12 hustle recommendations", "1 free trial business plan", "Community access"],
     },
     "starter": {
         "name": "Starter", "plan_limit": 10, "launch_kit_limit": 2,
-        "price": 9.99, "description": "10 plans/mo + 2 kits + AI Mentor",
-        "features": ["10 business plans/month", "2 launch kits with landing pages", "AI Mentor chat", "Priority support"],
+        "price": 9.99, "annual_price": 71.88,  # ~$5.99/mo equivalent, save $48/yr
+        "description": "10 plans/mo + 2 kits + AI Mentor",
+        "features": ["10 business plans/month", "2 launch kits with landing pages", "AI Mentor chat", "Priority support", "30-day money-back guarantee"],
     },
     "pro": {
         "name": "Pro", "plan_limit": 999999, "launch_kit_limit": 5,
-        "price": 29.99, "description": "Unlimited plans + 5 kits + AI Agents",
-        "features": ["Unlimited business plans", "5 launch kits", "AI Mentor + Marketing Agent", "Landing page customization"],
+        "price": 29.99, "annual_price": 215.88,  # ~$17.99/mo equivalent, save $144/yr
+        "description": "Unlimited plans + 5 kits + AI Agents",
+        "features": ["Unlimited business plans", "5 launch kits", "AI Mentor + Marketing Agent", "Landing page customization", "30-day money-back guarantee"],
     },
     "empire": {
         "name": "Empire", "plan_limit": 999999, "launch_kit_limit": 999999,
-        "price": 49.99, "description": "Unlimited everything + All AI Agents",
-        "features": ["Unlimited everything", "All AI Agents (Marketing, Content, Finance)", "AI Mentor with page editing", "White-label landing pages", "Dedicated support"],
+        "price": 79.99, "annual_price": 575.88,  # BUMP to $79.99 (whale pricing), save $384/yr
+        "description": "Unlimited everything + All AI Agents",
+        "features": ["Unlimited everything", "All AI Agents (Marketing, Content, Finance)", "AI Mentor with page editing", "White-label landing pages", "Dedicated support", "30-day money-back guarantee"],
     },
 }
 
 ALACARTE_PLAN_PRICE = 4.99
-ALACARTE_KIT_PRICE = 2.99
+# ALACARTE_KIT_PRICE removed — folded into Starter tier to raise perceived value
 ALACARTE_AGENT_PRICES = {
     "marketing": {"price": 9.99, "name": "Marketing Agent"},
     "content": {"price": 9.99, "name": "Content Writer"},
@@ -80,6 +84,12 @@ ALACARTE_AGENT_PRICES = {
 }
 ALACARTE_AGENT_PACK_PRICE = 19.99  # All 3 premium agents — 33% discount
 REFERRAL_CREDIT = 5.00
+
+# First-month promo codes (50% off)
+FIRST_MONTH_PROMO_CODES = {
+    "HUSTLE50": {"discount_pct": 50, "description": "50% off first month"},
+    "BETA50": {"discount_pct": 50, "description": "Beta tester 50% off first month"},
+}
 
 # ─── Questionnaire Questions ───
 QUESTIONNAIRE_QUESTIONS = [
@@ -129,6 +139,8 @@ class CheckoutRequest(BaseModel):
     plan: str
     origin_url: str
     hustle_id: Optional[str] = None
+    billing: Optional[str] = "monthly"  # "monthly" or "annual"
+    promo_code: Optional[str] = None
 
 # ─── Helpers ───
 def generate_referral_code():
@@ -805,7 +817,7 @@ async def check_kit_access(hustle_id: str, user: dict = Depends(get_current_user
         {"user_id": user["user_id"], "hustle_id": hustle_id, "payment_status": "paid", "plan_name": "alacarte_kit"}, {"_id": 0})
     if alacarte:
         return {"has_access": True, "reason": "alacarte_purchased", "kit_exists": False}
-    return {"has_access": False, "reason": "upgrade_required", "alacarte_price": ALACARTE_KIT_PRICE}
+    return {"has_access": False, "reason": "upgrade_required"}
 
 @api_router.post("/launch-kit/generate/{hustle_id}")
 async def generate_launch_kit(hustle_id: str, user: dict = Depends(get_current_user)):
@@ -892,10 +904,16 @@ async def get_referral_info(user: dict = Depends(get_current_user)):
 # ─── PAYMENT ENDPOINTS ───
 @api_router.post("/payments/create-checkout")
 async def create_checkout(req: CheckoutRequest, user: dict = Depends(get_current_user)):
-    valid = ["starter", "pro", "empire", "alacarte", "alacarte_kit"]
+    valid = ["starter", "pro", "empire", "alacarte"]
     if req.plan not in valid:
         raise HTTPException(status_code=400, detail="Invalid plan")
     origin_url = req.origin_url.rstrip('/')
+    billing = (req.billing or "monthly").lower()
+    if billing not in ("monthly", "annual"):
+        billing = "monthly"
+
+    promo_applied = None
+    promo_discount_pct = 0
 
     if req.plan == "alacarte":
         if not req.hustle_id:
@@ -903,17 +921,30 @@ async def create_checkout(req: CheckoutRequest, user: dict = Depends(get_current
         amount = float(ALACARTE_PLAN_PRICE)
         success_url = f"{origin_url}/payment-success?session_id={{CHECKOUT_SESSION_ID}}&type=alacarte&hustle_id={req.hustle_id}"
         metadata = {"user_id": user["user_id"], "plan": "alacarte", "plan_name": "alacarte", "hustle_id": req.hustle_id}
-    elif req.plan == "alacarte_kit":
-        if not req.hustle_id:
-            raise HTTPException(status_code=400, detail="hustle_id required")
-        amount = float(ALACARTE_KIT_PRICE)
-        success_url = f"{origin_url}/payment-success?session_id={{CHECKOUT_SESSION_ID}}&type=alacarte_kit&hustle_id={req.hustle_id}"
-        metadata = {"user_id": user["user_id"], "plan": "alacarte_kit", "plan_name": "alacarte_kit", "hustle_id": req.hustle_id}
     else:
         tier = SUBSCRIPTION_TIERS[req.plan]
-        amount = float(tier["price"])
+        # Annual or monthly amount
+        base_amount = float(tier["annual_price"]) if billing == "annual" else float(tier["price"])
+        amount = base_amount
+        # First-month promo (only applies to monthly subs, not annual or alacarte)
+        if req.promo_code and billing == "monthly":
+            code = req.promo_code.strip().upper()
+            if code in FIRST_MONTH_PROMO_CODES:
+                promo = FIRST_MONTH_PROMO_CODES[code]
+                # Check if user already used this code
+                existing = await db.promo_usage.find_one({
+                    "user_id": user["user_id"], "code": code
+                })
+                if not existing:
+                    promo_discount_pct = promo["discount_pct"]
+                    amount = round(base_amount * (1 - promo_discount_pct / 100), 2)
+                    promo_applied = code
         success_url = f"{origin_url}/payment-success?session_id={{CHECKOUT_SESSION_ID}}&type=subscription"
-        metadata = {"user_id": user["user_id"], "plan": req.plan, "plan_name": tier["name"]}
+        metadata = {
+            "user_id": user["user_id"], "plan": req.plan, "plan_name": tier["name"],
+            "billing": billing, "base_amount": str(base_amount),
+            "promo_code": promo_applied or "", "discount_pct": str(promo_discount_pct),
+        }
 
     cancel_url = f"{origin_url}/pricing"
     webhook_url = f"{origin_url}/api/webhook/stripe"
@@ -924,14 +955,40 @@ async def create_checkout(req: CheckoutRequest, user: dict = Depends(get_current
     txn = {
         "transaction_id": f"txn_{uuid.uuid4().hex[:12]}", "user_id": user["user_id"],
         "session_id": session.session_id, "amount": amount, "currency": "usd",
-        "plan_name": req.plan, "status": "initiated", "payment_status": "pending",
+        "plan_name": req.plan, "billing": billing, "promo_code": promo_applied,
+        "discount_pct": promo_discount_pct,
+        "status": "initiated", "payment_status": "pending",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     if req.hustle_id:
         txn["hustle_id"] = req.hustle_id
     await db.payment_transactions.insert_one(txn)
-    return {"url": session.url, "session_id": session.session_id}
+    # Record promo usage (prevents reuse)
+    if promo_applied:
+        await db.promo_usage.insert_one({
+            "user_id": user["user_id"], "code": promo_applied,
+            "session_id": session.session_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    return {"url": session.url, "session_id": session.session_id, "amount": amount,
+            "promo_applied": promo_applied, "discount_pct": promo_discount_pct}
+
+
+# First-month promo code validation (no charge yet — just check validity)
+@api_router.post("/promo/validate-checkout")
+async def validate_checkout_promo(req: dict, user: dict = Depends(get_current_user)):
+    code = (req.get("code", "") or "").strip().upper()
+    if not code:
+        return {"valid": False, "reason": "Enter a code"}
+    if code not in FIRST_MONTH_PROMO_CODES:
+        return {"valid": False, "reason": "Invalid promo code"}
+    existing = await db.promo_usage.find_one({"user_id": user["user_id"], "code": code})
+    if existing:
+        return {"valid": False, "reason": "You've already used this code"}
+    promo = FIRST_MONTH_PROMO_CODES[code]
+    return {"valid": True, "discount_pct": promo["discount_pct"],
+            "description": promo["description"]}
 
 @api_router.get("/payments/status/{session_id}")
 async def get_payment_status(session_id: str, user: dict = Depends(get_current_user)):
@@ -1016,12 +1073,13 @@ async def get_profile(user: dict = Depends(get_current_user)):
                   "remaining_plans": remaining_plans, "remaining_kits": remaining_kits,
                   "trial_used": trial_used, "referral_code": user.get("referral_code", ""),
                   "referral_credits": user.get("referral_credits", 0), "referral_count": referral_count},
-        "alacarte_plan_price": ALACARTE_PLAN_PRICE, "alacarte_kit_price": ALACARTE_KIT_PRICE,
+        "alacarte_plan_price": ALACARTE_PLAN_PRICE,
     }
 
 @api_router.get("/subscription/tiers")
 async def get_tiers():
-    return {"tiers": SUBSCRIPTION_TIERS, "alacarte_plan_price": ALACARTE_PLAN_PRICE, "alacarte_kit_price": ALACARTE_KIT_PRICE}
+    return {"tiers": SUBSCRIPTION_TIERS, "alacarte_plan_price": ALACARTE_PLAN_PRICE,
+            "promo_codes_available": list(FIRST_MONTH_PROMO_CODES.keys())}
 
 # ─── PROFILE UPDATE (phone) ───
 @api_router.put("/profile/phone")
