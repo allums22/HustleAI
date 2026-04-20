@@ -1121,6 +1121,82 @@ async def mark_researched(hustle_id: str, user: dict = Depends(get_current_user)
     )
     return {"status": "ok"}
 
+# ─── INCOME TRACKER ───
+class IncomeEntry(BaseModel):
+    hustle_id: str
+    amount: float
+    note: str = ""
+    date: str = ""
+
+@api_router.post("/income/log")
+async def log_income(req: IncomeEntry, user: dict = Depends(get_current_user)):
+    entry = {
+        "user_id": user["user_id"],
+        "hustle_id": req.hustle_id,
+        "amount": req.amount,
+        "note": req.note,
+        "date": req.date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.income_entries.insert_one(entry)
+    return {"status": "ok"}
+
+@api_router.get("/income/summary")
+async def income_summary(user: dict = Depends(get_current_user)):
+    entries = await db.income_entries.find({"user_id": user["user_id"]}, {"_id": 0}).sort("date", -1).to_list(200)
+    total = sum(e.get("amount", 0) for e in entries)
+    this_month = sum(e.get("amount", 0) for e in entries if e.get("date", "").startswith(datetime.now(timezone.utc).strftime("%Y-%m")))
+    # Group by hustle
+    by_hustle: Dict[str, float] = {}
+    for e in entries:
+        hid = e.get("hustle_id", "")
+        by_hustle[hid] = by_hustle.get(hid, 0) + e.get("amount", 0)
+    # Enrich with hustle names
+    hustle_breakdown = []
+    for hid, amt in sorted(by_hustle.items(), key=lambda x: -x[1]):
+        h = await db.side_hustles.find_one({"hustle_id": hid}, {"_id": 0, "name": 1})
+        hustle_breakdown.append({"hustle_id": hid, "name": h.get("name", "Unknown") if h else "Unknown", "total": amt})
+    return {"total": total, "this_month": this_month, "entries": entries[:20], "by_hustle": hustle_breakdown}
+
+# ─── DAILY TASK (from 30-day plan) ───
+@api_router.get("/daily-task")
+async def get_daily_task(user: dict = Depends(get_current_user)):
+    # Find the most recent plan with daily tasks
+    plans = await db.business_plans.find({"user_id": user["user_id"]}, {"_id": 0}).sort("created_at", -1).to_list(5)
+    for plan in plans:
+        daily_tasks = plan.get("daily_tasks", [])
+        if not daily_tasks:
+            continue
+        # Find completed tasks
+        completions = await db.task_completions.find({"user_id": user["user_id"], "plan_id": plan.get("plan_id", "")}, {"_id": 0, "day": 1}).to_list(100)
+        completed_days = set(c.get("day", 0) for c in completions)
+        # Find the next uncompleted task
+        for task in daily_tasks:
+            day = task.get("day", 0)
+            if day not in completed_days:
+                hustle = await db.side_hustles.find_one({"hustle_id": plan.get("hustle_id", "")}, {"_id": 0, "name": 1})
+                return {
+                    "task": task,
+                    "plan_title": plan.get("title", ""),
+                    "hustle_name": hustle.get("name", "") if hustle else "",
+                    "hustle_id": plan.get("hustle_id", ""),
+                    "plan_id": plan.get("plan_id", ""),
+                    "total_days": len(daily_tasks),
+                    "completed_days": len(completed_days),
+                    "progress": len(completed_days) / max(len(daily_tasks), 1),
+                }
+    return {"task": None}
+
+@api_router.post("/daily-task/complete")
+async def complete_daily_task(request: Request, user: dict = Depends(get_current_user)):
+    body = await request.json()
+    await db.task_completions.update_one(
+        {"user_id": user["user_id"], "plan_id": body.get("plan_id", ""), "day": body.get("day", 0)},
+        {"$set": {"completed_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True
+    )
+    return {"status": "ok"}
+
 # ─── BETA NDA & FEEDBACK ───
 
 @api_router.post("/beta/accept-nda")

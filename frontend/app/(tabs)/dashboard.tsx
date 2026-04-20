@@ -20,6 +20,9 @@ export default function DashboardScreen() {
   const [generating, setGenerating] = useState(false);
   const [motivation, setMotivation] = useState<any>(null);
   const [streak, setStreak] = useState<any>(null);
+  const [earningsSummary, setEarningsSummary] = useState<any>(null);
+  const [todayTasks, setTodayTasks] = useState<any[]>([]);
+  const [todayHustleId, setTodayHustleId] = useState<string>('');
 
   const loadData = useCallback(async () => {
     try {
@@ -39,11 +42,38 @@ export default function DashboardScreen() {
         router.replace('/welcome');
         return;
       }
-      // Load motivation & streak
+      // Load motivation, streak, earnings
       try {
-        const [motRes, streakRes] = await Promise.all([api.getDailyMotivation(), api.getStreak()]);
+        const [motRes, streakRes, earnRes] = await Promise.all([
+          api.getDailyMotivation(), api.getStreak(), api.getEarningsSummary(),
+        ]);
         setMotivation(motRes);
         setStreak(streakRes);
+        setEarningsSummary(earnRes);
+      } catch {}
+      // Load today's top 3 incomplete tasks from first selected hustle with a plan
+      try {
+        const firstActive = (hustlesRes.hustles || []).find((h: any) => h.selected && h.business_plan_generated);
+        if (firstActive) {
+          setTodayHustleId(firstActive.hustle_id);
+          const [planRes, progRes] = await Promise.all([
+            api.getPlan(firstActive.hustle_id),
+            api.getTaskProgress(firstActive.hustle_id),
+          ]);
+          const completedKeys: string[] = progRes?.completed_keys || [];
+          const all: any[] = [];
+          (planRes?.plan?.daily_tasks || []).forEach((d: any) => {
+            (d.tasks || []).forEach((t: string, ti: number) => {
+              const key = `${firstActive.hustle_id}_${d.day}_${ti}`;
+              if (!completedKeys.includes(key)) {
+                all.push({ day: d.day, taskIndex: ti, text: t, dayTitle: d.title, key });
+              }
+            });
+          });
+          setTodayTasks(all.slice(0, 3));
+        } else {
+          setTodayTasks([]);
+        }
       } catch {}
     } catch (e) {
       console.error('Dashboard load error:', e);
@@ -52,6 +82,16 @@ export default function DashboardScreen() {
       setRefreshing(false);
     }
   }, []);
+
+  const handleQuickToggleTask = async (task: any) => {
+    try {
+      await api.completeTask(todayHustleId, task.day, task.taskIndex, true);
+      setTodayTasks(prev => prev.filter(t => t.key !== task.key));
+      // Refresh streak + motivation
+      const [streakRes, motRes] = await Promise.all([api.getStreak(), api.getDailyMotivation()]);
+      setStreak(streakRes); setMotivation(motRes);
+    } catch (e) { console.error(e); }
+  };
 
   useEffect(() => {
     loadData();
@@ -153,6 +193,75 @@ export default function DashboardScreen() {
             <Text style={styles.statLabel}>{tier === 'empire' ? 'Unlimited' : tier === 'pro' ? 'Unlimited' : tier === 'free' && !trialUsed ? 'Free Trial' : 'Remaining'}</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Earnings Snapshot */}
+        {earningsSummary && (earningsSummary.total > 0 || earningsSummary.count > 0) && (
+          <TouchableOpacity
+            testID="earnings-snapshot"
+            style={styles.earningsCard}
+            onPress={() => router.push('/(tabs)/progress')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.earningsHeader}>
+              <View style={styles.earningsIconBox}>
+                <Ionicons name="trending-up" size={20} color={Colors.gold} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.earningsLabel}>Total Earned</Text>
+                <Text style={styles.earningsTotal}>${(earningsSummary.total || 0).toFixed(2)}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={Colors.textTertiary} />
+            </View>
+            <View style={styles.earningsRow}>
+              <View style={styles.earningsCell}>
+                <Text style={styles.earningsCellValue}>${(earningsSummary.today || 0).toFixed(0)}</Text>
+                <Text style={styles.earningsCellLabel}>Today</Text>
+              </View>
+              <View style={styles.earningsDivider} />
+              <View style={styles.earningsCell}>
+                <Text style={styles.earningsCellValue}>${(earningsSummary.this_week || 0).toFixed(0)}</Text>
+                <Text style={styles.earningsCellLabel}>This Week</Text>
+              </View>
+              <View style={styles.earningsDivider} />
+              <View style={styles.earningsCell}>
+                <Text style={styles.earningsCellValue}>${(earningsSummary.this_month || 0).toFixed(0)}</Text>
+                <Text style={styles.earningsCellLabel}>This Month</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* Today's Tasks Preview */}
+        {todayTasks.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="checkbox" size={20} color={Colors.gold} />
+                <Text style={styles.sectionTitle}>Today's Tasks</Text>
+              </View>
+              <TouchableOpacity onPress={() => router.push('/(tabs)/progress')}>
+                <Text style={styles.seeAll}>View All</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.tasksCard}>
+              {todayTasks.map((task, idx) => (
+                <TouchableOpacity
+                  key={task.key}
+                  testID={`dash-task-${idx}`}
+                  style={[styles.taskRow, idx > 0 && styles.taskRowBorder]}
+                  onPress={() => handleQuickToggleTask(task)}
+                  activeOpacity={0.6}
+                >
+                  <View style={styles.taskCheckbox} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.taskText} numberOfLines={2}>{task.text}</Text>
+                    <Text style={styles.taskMeta}>Day {task.day} · {task.dayTitle}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
 
         {/* Quick Actions */}
         <View style={styles.section}>
@@ -341,4 +450,22 @@ const styles = StyleSheet.create({
   nicheContent: { flex: 1 },
   nicheTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
   nicheDesc: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
+  // Earnings snapshot
+  earningsCard: { marginHorizontal: 24, marginTop: 16, backgroundColor: Colors.surface, borderRadius: 14, padding: 16, borderWidth: 1.5, borderColor: Colors.gold + '40', maxWidth: 1000, alignSelf: 'center', width: '100%' },
+  earningsHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  earningsIconBox: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.orangeLight, justifyContent: 'center', alignItems: 'center' },
+  earningsLabel: { fontSize: 11, fontWeight: '700', color: Colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  earningsTotal: { fontSize: 24, fontWeight: '800', color: Colors.gold, marginTop: 2 },
+  earningsRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background, borderRadius: 10, padding: 12 },
+  earningsCell: { flex: 1, alignItems: 'center' },
+  earningsCellValue: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary },
+  earningsCellLabel: { fontSize: 10, color: Colors.textTertiary, fontWeight: '600', marginTop: 2, textTransform: 'uppercase' },
+  earningsDivider: { width: 1, height: 24, backgroundColor: Colors.border },
+  // Today's tasks preview
+  tasksCard: { backgroundColor: Colors.surface, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border },
+  taskRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 14, paddingHorizontal: 16 },
+  taskRowBorder: { borderTopWidth: 1, borderTopColor: Colors.borderLight },
+  taskCheckbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: Colors.gold, marginTop: 2 },
+  taskText: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary, lineHeight: 20 },
+  taskMeta: { fontSize: 11, color: Colors.textTertiary, marginTop: 3, fontWeight: '500' },
 });

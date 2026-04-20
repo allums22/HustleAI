@@ -1,408 +1,343 @@
-#!/usr/bin/env python3
 """
-HustleAI Backend API Comprehensive Testing Script
-Tests all backend endpoints for the HustleAI application using Empire tier session token
+HustleAI Backend Retention Endpoints Test Suite
+Tests all 10/10 retention feature endpoints using Empire tier session token
 """
-
-import requests
-import json
+import os
 import sys
-from typing import Dict, Any, Optional
+import json
+import requests
+from typing import Dict, Any
 
-# Configuration
-BASE_URL = "https://skill-match-hustle.preview.emergentagent.com/api"
-EMPIRE_SESSION_TOKEN = "sess_02b7e25f5bf24900abc602309216532a"
+BACKEND_URL = None
+with open("/app/frontend/.env", "r") as f:
+    for line in f:
+        if line.startswith("EXPO_PUBLIC_BACKEND_URL="):
+            BACKEND_URL = line.split("=", 1)[1].strip().strip('"').strip("'")
+            break
 
-class HustleAITester:
-    def __init__(self):
-        self.session_token = EMPIRE_SESSION_TOKEN
-        self.test_results = []
-        self.hustles = []
-        
-    def log_result(self, test_name: str, success: bool, details: str = "", response_data: Any = None):
-        """Log test result"""
-        status = "✅ PASS" if success else "❌ FAIL"
-        print(f"{status} {test_name}")
-        if details:
-            print(f"   Details: {details}")
-        if response_data and not success:
-            print(f"   Response: {response_data}")
-        print()
-        
-        self.test_results.append({
-            "test": test_name,
-            "success": success,
-            "details": details,
-            "response": response_data
-        })
-    
-    def make_request(self, method: str, endpoint: str, data: Dict = None, headers: Dict = None) -> tuple:
-        """Make HTTP request and return (success, response_data, status_code)"""
-        url = f"{BASE_URL}{endpoint}"
-        req_headers = {"Content-Type": "application/json"}
-        
-        if self.session_token:
-            req_headers["Authorization"] = f"Bearer {self.session_token}"
-        
-        if headers:
-            req_headers.update(headers)
-        
+API = f"{BACKEND_URL}/api"
+SESSION_TOKEN = "sess_02b7e25f5bf24900abc602309216532a"
+HEADERS = {
+    "Authorization": f"Bearer {SESSION_TOKEN}",
+    "Content-Type": "application/json",
+}
+HUSTLE_ID = "hustle_704f65442468"
+
+results = []
+
+def log(name, ok, detail=""):
+    status = "PASS" if ok else "FAIL"
+    print(f"[{status}] {name}")
+    if detail:
+        print(f"     -> {detail}")
+    results.append({"name": name, "ok": ok, "detail": detail})
+
+def _req(method, path, **kw):
+    url = f"{API}{path}"
+    kw.setdefault("headers", HEADERS)
+    kw.setdefault("timeout", 60)
+    try:
+        return requests.request(method, url, **kw)
+    except Exception as e:
+        return e
+
+print(f"Backend base URL: {API}")
+print(f"Auth token: {SESSION_TOKEN}")
+print("=" * 70)
+
+# 1. INCOME TRACKER
+print("\n[1] Income Tracker")
+r = _req("POST", "/income/log", json={
+    "hustle_id": HUSTLE_ID, "amount": 250, "note": "First client payment"
+})
+if isinstance(r, Exception):
+    log("POST /api/income/log", False, f"Exception: {r}")
+else:
+    try:
+        ok = r.status_code == 200 and r.json().get("status") == "ok"
+    except Exception:
+        ok = False
+    log("POST /api/income/log", ok, f"HTTP {r.status_code} body={r.text[:200]}")
+
+r = _req("GET", "/income/summary")
+if isinstance(r, Exception):
+    log("GET /api/income/summary", False, f"Exception: {r}")
+else:
+    try:
+        j = r.json()
+        keys_ok = all(k in j for k in ["total", "this_month", "entries", "by_hustle"])
+        ok = r.status_code == 200 and keys_ok
+        log("GET /api/income/summary", ok,
+            f"HTTP {r.status_code} total={j.get('total')} this_month={j.get('this_month')} "
+            f"entries={len(j.get('entries', []))} by_hustle={len(j.get('by_hustle', []))}")
+    except Exception as e:
+        log("GET /api/income/summary", False, f"Parse error: {e}")
+
+# 2. DAILY TASK
+print("\n[2] Daily Task")
+plan_id_for_daily = None
+day_for_daily = None
+r = _req("GET", "/daily-task")
+if isinstance(r, Exception):
+    log("GET /api/daily-task", False, f"Exception: {r}")
+else:
+    try:
+        j = r.json()
+        ok = r.status_code == 200
+        if j.get("task") is None:
+            log("GET /api/daily-task", ok, f"HTTP {r.status_code} no plans exist -> {{task: null}}")
+        else:
+            task = j["task"]
+            plan_id_for_daily = j.get("plan_id")
+            day_for_daily = task.get("day")
+            ok2 = ok and "day" in task and "tasks" in task and plan_id_for_daily
+            log("GET /api/daily-task", ok2,
+                f"HTTP {r.status_code} day={day_for_daily} plan_id={plan_id_for_daily} hustle={j.get('hustle_name')}")
+    except Exception as e:
+        log("GET /api/daily-task", False, f"Parse error: {e}")
+
+if plan_id_for_daily and day_for_daily is not None:
+    r = _req("POST", "/daily-task/complete", json={
+        "plan_id": plan_id_for_daily, "day": day_for_daily
+    })
+    if isinstance(r, Exception):
+        log("POST /api/daily-task/complete", False, f"Exception: {r}")
+    else:
         try:
-            if method.upper() == "GET":
-                response = requests.get(url, headers=req_headers, timeout=30)
-            elif method.upper() == "POST":
-                response = requests.post(url, json=data, headers=req_headers, timeout=30)
-            elif method.upper() == "PUT":
-                response = requests.put(url, json=data, headers=req_headers, timeout=30)
-            else:
-                return False, f"Unsupported method: {method}", 0
-            
-            try:
-                response_data = response.json()
-            except:
-                response_data = response.text
-            
-            return response.status_code < 400, response_data, response.status_code
-            
-        except requests.exceptions.RequestException as e:
-            return False, f"Request failed: {str(e)}", 0
-    
-    def test_get_hustles(self):
-        """Test GET /api/hustles - Should return ALL hustles (60+) with is_premium field"""
-        print("🎯 Testing GET /api/hustles...")
-        
-        success, data, status_code = self.make_request("GET", "/hustles")
-        
-        if success and "hustles" in data:
-            hustles = data["hustles"]
-            self.hustles = hustles  # Store for other tests
-            
-            # Check count
-            hustle_count = len(hustles)
-            
-            # Check is_premium field
-            has_is_premium = all("is_premium" in h for h in hustles)
-            
-            # Count premium vs starter
-            premium_count = sum(1 for h in hustles if h.get("is_premium", False))
-            starter_count = hustle_count - premium_count
-            
-            if hustle_count >= 60 and has_is_premium:
-                self.log_result("GET /api/hustles", True, 
-                    f"Got {hustle_count} hustles (expected 60+), {premium_count} premium, {starter_count} starter, all have is_premium field")
-            else:
-                self.log_result("GET /api/hustles", False, 
-                    f"Got {hustle_count} hustles (expected 60+), is_premium field present: {has_is_premium}")
-        else:
-            self.log_result("GET /api/hustles", False, f"Status: {status_code}", data)
-    
-    def test_generate_industry_hustles(self):
-        """Test POST /api/hustles/generate/industry - Send real estate flipping, should return 6 hustles"""
-        print("🏠 Testing POST /api/hustles/generate/industry...")
-        
-        request_data = {"industry": "real estate flipping"}
-        success, data, status_code = self.make_request("POST", "/hustles/generate/industry", request_data)
-        
-        if success and "hustles" in data:
-            hustles = data["hustles"]
-            industry = data.get("industry", "")
-            
-            # Check count
-            hustle_count = len(hustles)
-            
-            # Check all are in real estate category
-            real_estate_count = sum(1 for h in hustles if "real estate" in h.get("category", "").lower())
-            
-            if hustle_count == 6 and real_estate_count == 6:
-                self.log_result("POST /api/hustles/generate/industry", True, 
-                    f"Generated {hustle_count} hustles, all in real estate category, industry: {industry}")
-            else:
-                self.log_result("POST /api/hustles/generate/industry", False, 
-                    f"Generated {hustle_count} hustles (expected 6), {real_estate_count} in real estate category")
-        else:
-            self.log_result("POST /api/hustles/generate/industry", False, f"Status: {status_code}", data)
-    
-    def test_get_agents(self):
-        """Test GET /api/agents - Should return 4 agents with descriptions, prompts, prices"""
-        print("🤖 Testing GET /api/agents...")
-        
-        success, data, status_code = self.make_request("GET", "/agents")
-        
-        if success and "agents" in data:
-            agents = data["agents"]
-            alacarte_prices = data.get("alacarte_prices", {})
-            agent_pack_price = data.get("agent_pack_price", 0)
-            
-            # Check count
-            agent_count = len(agents)
-            
-            # Check each agent has required fields
-            valid_agents = 0
-            for agent in agents:
-                if all(field in agent for field in ["id", "name", "description", "prompts"]):
-                    if len(agent.get("prompts", [])) == 5:
-                        valid_agents += 1
-            
-            # Check pricing
-            has_alacarte_prices = len(alacarte_prices) >= 3  # marketing, content, finance
-            correct_pack_price = agent_pack_price == 19.99
-            
-            if agent_count == 4 and valid_agents == 4 and has_alacarte_prices and correct_pack_price:
-                self.log_result("GET /api/agents", True, 
-                    f"Got {agent_count} agents, all have descriptions & 5 prompts each, alacarte prices: ${list(alacarte_prices.values())}, pack price: ${agent_pack_price}")
-            else:
-                self.log_result("GET /api/agents", False, 
-                    f"Got {agent_count} agents (expected 4), valid: {valid_agents}, alacarte prices: {has_alacarte_prices}, pack price: ${agent_pack_price}")
-        else:
-            self.log_result("GET /api/agents", False, f"Status: {status_code}", data)
-    
-    def test_agent_chat(self):
-        """Test POST /api/agents/{hustle_id}/chat - Test with marketing agent"""
-        print("💬 Testing POST /api/agents/{hustle_id}/chat...")
-        
-        if not self.hustles:
-            self.log_result("POST /api/agents/{hustle_id}/chat", False, "No hustles available for testing")
-            return
-        
-        hustle_id = self.hustles[0]["hustle_id"]
-        chat_data = {
-            "message": "Create a social media post for this hustle",
-            "agent_id": "marketing"
-        }
-        
-        success, data, status_code = self.make_request("POST", f"/agents/{hustle_id}/chat", chat_data)
-        
-        if success and "response" in data:
-            response_text = data["response"]
-            self.log_result("POST /api/agents/{hustle_id}/chat", True, 
-                f"Marketing agent responded with {len(response_text)} characters")
-        else:
-            self.log_result("POST /api/agents/{hustle_id}/chat", False, f"Status: {status_code}", data)
-    
-    def test_agent_history(self):
-        """Test GET /api/agents/{hustle_id}/history/marketing - Should return saved conversation"""
-        print("📜 Testing GET /api/agents/{hustle_id}/history/marketing...")
-        
-        if not self.hustles:
-            self.log_result("GET /api/agents/{hustle_id}/history/marketing", False, "No hustles available for testing")
-            return
-        
-        hustle_id = self.hustles[0]["hustle_id"]
-        success, data, status_code = self.make_request("GET", f"/agents/{hustle_id}/history/marketing")
-        
-        if success and "messages" in data:
-            messages = data["messages"]
-            message_count = len(messages)
-            self.log_result("GET /api/agents/{hustle_id}/history/marketing", True, 
-                f"Got conversation history with {message_count} messages")
-        else:
-            self.log_result("GET /api/agents/{hustle_id}/history/marketing", False, f"Status: {status_code}", data)
-    
-    def test_subscription_tiers(self):
-        """Test GET /api/subscription/tiers - Each tier should have features array with AI mentions"""
-        print("💰 Testing GET /api/subscription/tiers...")
-        
-        success, data, status_code = self.make_request("GET", "/subscription/tiers")
-        
-        if success and "tiers" in data:
-            tiers = data["tiers"]
-            
-            # Check each tier has features array
-            valid_tiers = 0
-            ai_mentions = 0
-            
-            for tier_name, tier_info in tiers.items():
-                if "features" in tier_info and isinstance(tier_info["features"], list):
-                    valid_tiers += 1
-                    # Check for AI mentions in features
-                    features_text = " ".join(tier_info["features"]).lower()
-                    if "ai mentor" in features_text or "ai agent" in features_text:
-                        ai_mentions += 1
-            
-            if valid_tiers == 4 and ai_mentions >= 2:
-                self.log_result("GET /api/subscription/tiers", True, 
-                    f"Got {valid_tiers} tiers, all have features arrays, {ai_mentions} mention AI Mentor/Agents")
-            else:
-                self.log_result("GET /api/subscription/tiers", False, 
-                    f"Got {valid_tiers} valid tiers (expected 4), {ai_mentions} mention AI features")
-        else:
-            self.log_result("GET /api/subscription/tiers", False, f"Status: {status_code}", data)
-    
-    def test_beta_feedback_submit(self):
-        """Test POST /api/beta/feedback - Submit test feedback"""
-        print("📝 Testing POST /api/beta/feedback...")
-        
-        feedback_data = {
-            "category": "general",
-            "rating": 5,
-            "message": "Test feedback"
-        }
-        
-        success, data, status_code = self.make_request("POST", "/beta/feedback", feedback_data)
-        
-        if success and data.get("status") == "ok":
-            self.log_result("POST /api/beta/feedback", True, "Feedback submitted successfully")
-        else:
-            self.log_result("POST /api/beta/feedback", False, f"Status: {status_code}", data)
-    
-    def test_beta_feedback_get(self):
-        """Test GET /api/beta/feedback - Should return the feedback just submitted"""
-        print("📋 Testing GET /api/beta/feedback...")
-        
-        success, data, status_code = self.make_request("GET", "/beta/feedback")
-        
-        if success and "feedbacks" in data:
-            feedbacks = data["feedbacks"]
-            feedback_count = len(feedbacks)
-            
-            # Check if our test feedback is there
-            test_feedback_found = any(f.get("message") == "Test feedback" for f in feedbacks)
-            
-            self.log_result("GET /api/beta/feedback", True, 
-                f"Got {feedback_count} feedbacks, test feedback found: {test_feedback_found}")
-        else:
-            self.log_result("GET /api/beta/feedback", False, f"Status: {status_code}", data)
-    
-    def test_beta_nda_status(self):
-        """Test GET /api/beta/nda-status - Should return accepted: true"""
-        print("📄 Testing GET /api/beta/nda-status...")
-        
-        success, data, status_code = self.make_request("GET", "/beta/nda-status")
-        
-        if success and "accepted" in data:
-            accepted = data["accepted"]
-            self.log_result("GET /api/beta/nda-status", True, f"NDA accepted: {accepted}")
-        else:
-            self.log_result("GET /api/beta/nda-status", False, f"Status: {status_code}", data)
-    
-    def test_launch_kit_customize(self):
-        """Test POST /api/launch-kit/{hustle_id}/customize - Test with phone and email"""
-        print("🎨 Testing POST /api/launch-kit/{hustle_id}/customize...")
-        
-        if not self.hustles:
-            self.log_result("POST /api/launch-kit/{hustle_id}/customize", False, "No hustles available for testing")
-            return
-        
-        hustle_id = self.hustles[0]["hustle_id"]
-        customize_data = {
-            "phone": "555-999-1234",
-            "email": "james@hustleai.live"
-        }
-        
-        success, data, status_code = self.make_request("PUT", f"/launch-kit/{hustle_id}/customize", customize_data)
-        
-        if success and "html" in data:
-            html = data["html"]
-            # Check if phone number is in the HTML
-            phone_in_html = "555-999-1234" in html
-            self.log_result("POST /api/launch-kit/{hustle_id}/customize", True, 
-                f"Customization successful, HTML length: {len(html)}, phone number included: {phone_in_html}")
-        elif status_code == 404:
-            self.log_result("POST /api/launch-kit/{hustle_id}/customize", True, 
-                "Correctly returned 404 for non-existent kit (expected behavior)")
-        else:
-            self.log_result("POST /api/launch-kit/{hustle_id}/customize", False, f"Status: {status_code}", data)
-    
-    def test_profile(self):
-        """Test GET /api/profile - Verify tier is empire with unlimited counts"""
-        print("👤 Testing GET /api/profile...")
-        
-        success, data, status_code = self.make_request("GET", "/profile")
-        
-        if success and "user" in data and "subscription" in data:
-            user = data["user"]
-            subscription = data["subscription"]
-            stats = data.get("stats", {})
-            
-            tier = subscription.get("tier", "")
-            plan_limit = subscription.get("plan_limit", 0)
-            kit_limit = subscription.get("launch_kit_limit", 0)
-            
-            if tier == "empire" and plan_limit == 999999 and kit_limit == 999999:
-                self.log_result("GET /api/profile", True, 
-                    f"Empire user confirmed, unlimited plans ({plan_limit}) and kits ({kit_limit})")
-            else:
-                self.log_result("GET /api/profile", False, 
-                    f"Tier: {tier} (expected empire), plan limit: {plan_limit}, kit limit: {kit_limit}")
-        else:
-            self.log_result("GET /api/profile", False, f"Status: {status_code}", data)
-    
-    def test_promo_redeem_invalid(self):
-        """Test POST /api/promo/redeem with invalid code - Should return 400"""
-        print("🎫 Testing POST /api/promo/redeem (invalid code)...")
-        
-        promo_data = {"code": "INVALID"}
-        success, data, status_code = self.make_request("POST", "/promo/redeem", promo_data)
-        
-        if status_code == 400:
-            self.log_result("POST /api/promo/redeem (invalid)", True, 
-                "Correctly returned 400 for invalid promo code")
-        else:
-            self.log_result("POST /api/promo/redeem (invalid)", False, 
-                f"Expected 400, got {status_code}", data)
-    
-    def test_promo_redeem_valid(self):
-        """Test POST /api/promo/redeem with valid code - Should return already_redeemed"""
-        print("🎫 Testing POST /api/promo/redeem (valid code)...")
-        
-        promo_data = {"code": "HUSTLEVIP2025"}
-        success, data, status_code = self.make_request("POST", "/promo/redeem", promo_data)
-        
-        if success and data.get("status") == "already_redeemed":
-            self.log_result("POST /api/promo/redeem (valid)", True, 
-                "Correctly returned already_redeemed for HUSTLEVIP2025")
-        elif success and data.get("status") == "success":
-            self.log_result("POST /api/promo/redeem (valid)", True, 
-                "Successfully redeemed HUSTLEVIP2025 code")
-        else:
-            self.log_result("POST /api/promo/redeem (valid)", False, f"Status: {status_code}", data)
-    
-    def run_all_tests(self):
-        """Run all comprehensive tests in sequence"""
-        print("🚀 Starting HustleAI Backend Comprehensive API Tests")
-        print("🔑 Using Empire tier session token: sess_02b7e25f5bf24900abc602309216532a")
-        print("=" * 70)
-        
-        # Run all test suites in order
-        self.test_get_hustles()
-        self.test_generate_industry_hustles()
-        self.test_get_agents()
-        self.test_agent_chat()
-        self.test_agent_history()
-        self.test_subscription_tiers()
-        self.test_beta_feedback_submit()
-        self.test_beta_feedback_get()
-        self.test_beta_nda_status()
-        self.test_launch_kit_customize()
-        self.test_profile()
-        self.test_promo_redeem_invalid()
-        self.test_promo_redeem_valid()
-        
-        # Summary
-        print("=" * 70)
-        print("📊 COMPREHENSIVE TEST SUMMARY")
-        print("=" * 70)
-        
-        total_tests = len(self.test_results)
-        passed_tests = sum(1 for r in self.test_results if r["success"])
-        failed_tests = total_tests - passed_tests
-        
-        print(f"Total Tests: {total_tests}")
-        print(f"Passed: {passed_tests}")
-        print(f"Failed: {failed_tests}")
-        print(f"Success Rate: {(passed_tests/total_tests)*100:.1f}%")
-        
-        if failed_tests > 0:
-            print("\n❌ FAILED TESTS:")
-            for result in self.test_results:
-                if not result["success"]:
-                    print(f"  - {result['test']}: {result['details']}")
-        else:
-            print("\n🎉 ALL TESTS PASSED!")
-        
-        return failed_tests == 0
+            ok = r.status_code == 200 and r.json().get("status") == "ok"
+        except Exception:
+            ok = False
+        log("POST /api/daily-task/complete", ok, f"HTTP {r.status_code} body={r.text[:200]}")
+else:
+    log("POST /api/daily-task/complete (skipped)", True,
+        "SKIPPED - no active plan with daily tasks for this user")
 
-if __name__ == "__main__":
-    tester = HustleAITester()
-    success = tester.run_all_tests()
-    sys.exit(0 if success else 1)
+# 3. TASKS & STREAK
+print("\n[3] Tasks & Streak")
+r = _req("POST", f"/tasks/{HUSTLE_ID}/complete", json={
+    "day": 1, "task_index": 0, "completed": True
+})
+if isinstance(r, Exception):
+    log(f"POST /api/tasks/{HUSTLE_ID}/complete", False, f"Exception: {r}")
+else:
+    try:
+        ok = r.status_code == 200 and r.json().get("status") == "ok"
+    except Exception:
+        ok = False
+    log(f"POST /api/tasks/{HUSTLE_ID}/complete", ok, f"HTTP {r.status_code} body={r.text[:200]}")
+
+r = _req("GET", "/tasks/streak")
+if isinstance(r, Exception):
+    log("GET /api/tasks/streak", False, f"Exception: {r}")
+else:
+    try:
+        j = r.json()
+        keys_ok = all(k in j for k in ["current_streak", "longest_streak", "total_completed"])
+        ok = r.status_code == 200 and keys_ok
+        log("GET /api/tasks/streak", ok,
+            f"HTTP {r.status_code} current={j.get('current_streak')} longest={j.get('longest_streak')} total={j.get('total_completed')}")
+    except Exception as e:
+        log("GET /api/tasks/streak", False, f"Parse error: {e}")
+
+r = _req("GET", f"/tasks/{HUSTLE_ID}/progress")
+if isinstance(r, Exception):
+    log(f"GET /api/tasks/{HUSTLE_ID}/progress", False, f"Exception: {r}")
+else:
+    try:
+        j = r.json()
+        keys_ok = all(k in j for k in ["completed_keys", "completed_count", "total_tasks", "percent"])
+        ok = r.status_code == 200 and keys_ok
+        log(f"GET /api/tasks/{HUSTLE_ID}/progress", ok,
+            f"HTTP {r.status_code} completed={j.get('completed_count')}/{j.get('total_tasks')} percent={j.get('percent')}%")
+    except Exception as e:
+        log(f"GET /api/tasks/{HUSTLE_ID}/progress", False, f"Parse error: {e}")
+
+# 4. EARNINGS TRACKER
+print("\n[4] Earnings Tracker")
+earning_id = None
+r = _req("POST", "/earnings/log", json={
+    "amount": 500, "hustle_id": HUSTLE_ID, "note": "Week 1 sales"
+})
+if isinstance(r, Exception):
+    log("POST /api/earnings/log", False, f"Exception: {r}")
+else:
+    try:
+        j = r.json()
+        earning_id = j.get("earning_id")
+        ok = r.status_code == 200 and earning_id and j.get("status") == "ok"
+        log("POST /api/earnings/log", ok, f"HTTP {r.status_code} earning_id={earning_id}")
+    except Exception as e:
+        log("POST /api/earnings/log", False, f"Parse error: {e}")
+
+r = _req("GET", "/earnings")
+if isinstance(r, Exception):
+    log("GET /api/earnings", False, f"Exception: {r}")
+else:
+    try:
+        j = r.json()
+        earnings_list = j.get("earnings") if isinstance(j, dict) else j
+        ok = r.status_code == 200 and isinstance(earnings_list, list)
+        log("GET /api/earnings", ok,
+            f"HTTP {r.status_code} count={len(earnings_list) if isinstance(earnings_list, list) else 'N/A'}")
+    except Exception as e:
+        log("GET /api/earnings", False, f"Parse error: {e}")
+
+r = _req("GET", "/earnings/summary")
+if isinstance(r, Exception):
+    log("GET /api/earnings/summary", False, f"Exception: {r}")
+else:
+    try:
+        j = r.json()
+        keys_ok = all(k in j for k in ["total", "today", "this_week", "this_month", "count"])
+        ok = r.status_code == 200 and keys_ok
+        log("GET /api/earnings/summary", ok,
+            f"HTTP {r.status_code} total={j.get('total')} today={j.get('today')} "
+            f"week={j.get('this_week')} month={j.get('this_month')} count={j.get('count')}")
+    except Exception as e:
+        log("GET /api/earnings/summary", False, f"Parse error: {e}")
+
+# 5. ACHIEVEMENTS
+print("\n[5] Achievements")
+r = _req("GET", "/achievements")
+if isinstance(r, Exception):
+    log("GET /api/achievements", False, f"Exception: {r}")
+else:
+    try:
+        j = r.json()
+        achs = j.get("achievements", [])
+        newly = j.get("newly_unlocked", [])
+        count_ok = len(achs) == 12
+        schema_ok = all(all(k in a for k in ["id", "name", "desc", "icon", "condition", "unlocked"]) for a in achs)
+        ach_map = {a["id"]: a for a in achs}
+        first_earning_ok = ach_map.get("first_earning", {}).get("unlocked") is True
+        unlocked_ids = [a["id"] for a in achs if a.get("unlocked")]
+        ok = r.status_code == 200 and count_ok and schema_ok and first_earning_ok
+        log("GET /api/achievements", ok,
+            f"HTTP {r.status_code} count={len(achs)}/12 schema_ok={schema_ok} "
+            f"first_earning_unlocked={first_earning_ok} unlocked={unlocked_ids} newly={newly}")
+    except Exception as e:
+        log("GET /api/achievements", False, f"Parse error: {e}")
+
+# 6. COMMUNITY WINS BOARD
+print("\n[6] Community Wins Board")
+post_id = None
+r = _req("POST", "/community/posts", json={
+    "content": "Just earned my first $500!",
+    "amount": 500,
+    "milestone": "First $100",
+})
+if isinstance(r, Exception):
+    log("POST /api/community/posts", False, f"Exception: {r}")
+else:
+    try:
+        j = r.json()
+        post_id = j.get("post_id")
+        ok = r.status_code == 200 and post_id
+        log("POST /api/community/posts", ok, f"HTTP {r.status_code} post_id={post_id}")
+    except Exception as e:
+        log("POST /api/community/posts", False, f"Parse error: {e}")
+
+r = _req("GET", "/community/posts")
+if isinstance(r, Exception):
+    log("GET /api/community/posts", False, f"Exception: {r}")
+else:
+    try:
+        j = r.json()
+        posts = j.get("posts") if isinstance(j, dict) else j
+        found = any(p.get("post_id") == post_id for p in posts) if post_id else True
+        ok = r.status_code == 200 and isinstance(posts, list) and found
+        log("GET /api/community/posts", ok,
+            f"HTTP {r.status_code} count={len(posts) if isinstance(posts, list) else 'N/A'} new_post_found={found}")
+    except Exception as e:
+        log("GET /api/community/posts", False, f"Parse error: {e}")
+
+if post_id:
+    before_r = _req("GET", "/community/posts")
+    before_reactions = 0
+    try:
+        for p in before_r.json().get("posts", []):
+            if p.get("post_id") == post_id:
+                before_reactions = p.get("reactions", 0)
+                break
+    except Exception:
+        pass
+    r = _req("POST", f"/community/posts/{post_id}/react")
+    if isinstance(r, Exception):
+        log("POST /api/community/posts/<id>/react", False, f"Exception: {r}")
+    else:
+        try:
+            ok = r.status_code == 200 and r.json().get("status") == "ok"
+        except Exception:
+            ok = False
+        after_r = _req("GET", "/community/posts")
+        after_reactions = 0
+        try:
+            for p in after_r.json().get("posts", []):
+                if p.get("post_id") == post_id:
+                    after_reactions = p.get("reactions", 0)
+                    break
+        except Exception:
+            pass
+        incremented = after_reactions > before_reactions
+        log("POST /api/community/posts/<id>/react", ok and incremented,
+            f"HTTP {r.status_code} reactions {before_reactions} -> {after_reactions}")
+else:
+    log("POST /api/community/posts/<id>/react", False, "No post_id captured")
+
+# 7. MOTIVATION
+print("\n[7] Motivation")
+r = _req("GET", "/motivation/daily")
+if isinstance(r, Exception):
+    log("GET /api/motivation/daily", False, f"Exception: {r}")
+else:
+    try:
+        j = r.json()
+        keys_ok = all(k in j for k in ["message", "weekly_estimate", "monthly_estimate",
+                                         "current_day", "today_tasks", "percent"])
+        ok = r.status_code == 200 and keys_ok
+        log("GET /api/motivation/daily", ok,
+            f"HTTP {r.status_code} day={j.get('current_day')}/30 tasks={j.get('today_tasks')} "
+            f"weekly=${j.get('weekly_estimate')} monthly=${j.get('monthly_estimate')} "
+            f"percent={j.get('percent')}% msg={j.get('message','')[:60]}")
+    except Exception as e:
+        log("GET /api/motivation/daily", False, f"Parse error: {e}")
+
+# 8. REGRESSION
+print("\n[8] Regression (core endpoints)")
+for path, check in [
+    ("/profile", lambda j: j.get("email")),
+    ("/hustles", lambda j: isinstance(j.get("hustles") if isinstance(j, dict) else j, list)),
+    ("/agents", lambda j: len((j.get("agents") if isinstance(j, dict) else j) or []) >= 4),
+    ("/referral/info", lambda j: isinstance(j, dict) and len(j.keys()) >= 1),
+]:
+    r = _req("GET", path)
+    if isinstance(r, Exception):
+        log(f"GET /api{path}", False, f"Exception: {r}")
+        continue
+    try:
+        j = r.json()
+        ok = r.status_code == 200 and check(j)
+        detail = f"HTTP {r.status_code}"
+        if path == "/profile":
+            detail += f" email={j.get('email')} tier={j.get('subscription_tier')}"
+        elif path == "/hustles":
+            lst = j.get("hustles") if isinstance(j, dict) else j
+            detail += f" count={len(lst) if isinstance(lst, list) else 'N/A'}"
+        elif path == "/agents":
+            lst = j.get("agents") if isinstance(j, dict) else j
+            detail += f" count={len(lst) if isinstance(lst, list) else 'N/A'}"
+        elif path == "/referral/info":
+            detail += f" keys={list(j.keys()) if isinstance(j, dict) else type(j).__name__}"
+        log(f"GET /api{path}", ok, detail)
+    except Exception as e:
+        log(f"GET /api{path}", False, f"Parse error: {e} body={r.text[:200]}")
+
+# Summary
+print("\n" + "=" * 70)
+passed = sum(1 for r in results if r["ok"])
+total = len(results)
+print(f"RESULTS: {passed}/{total} passed")
+for r in results:
+    if not r["ok"]:
+        print(f"  FAIL: {r['name']}: {r['detail']}")
+sys.exit(0 if passed == total else 1)

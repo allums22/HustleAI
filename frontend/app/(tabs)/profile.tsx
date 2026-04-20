@@ -12,6 +12,7 @@ export default function ProfileScreen() {
   const { user, logout, refreshUser } = useAuth();
   const router = useRouter();
   const [profile, setProfile] = useState<any>(null);
+  const [achievements, setAchievements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [promoCode, setPromoCode] = useState('');
@@ -21,7 +22,11 @@ export default function ProfileScreen() {
   useEffect(() => { loadProfile(); }, []);
 
   const loadProfile = async () => {
-    try { setProfile(await api.getProfile()); } catch (e) { console.error(e); }
+    try {
+      const [p, a] = await Promise.all([api.getProfile(), api.getAchievements().catch(() => ({ achievements: [] }))]);
+      setProfile(p);
+      setAchievements(a.achievements || []);
+    } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
 
@@ -177,6 +182,32 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Achievements */}
+        {achievements.length > 0 && (
+          <View style={styles.achCard}>
+            <View style={styles.achHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="trophy" size={20} color={Colors.gold} />
+                <Text style={styles.achTitle}>Achievements</Text>
+              </View>
+              <Text style={styles.achCount}>
+                {achievements.filter(a => a.unlocked).length}/{achievements.length}
+              </Text>
+            </View>
+            <View style={styles.achGrid}>
+              {achievements.map((a) => (
+                <View key={a.id} style={[styles.achBadge, a.unlocked ? styles.achBadgeUnlocked : styles.achBadgeLocked]}>
+                  <View style={[styles.achIconWrap, a.unlocked ? styles.achIconWrapUnlocked : styles.achIconWrapLocked]}>
+                    <Ionicons name={a.unlocked ? (a.icon as any) : 'lock-closed'} size={20} color={a.unlocked ? Colors.gold : Colors.textTertiary} />
+                  </View>
+                  <Text style={[styles.achName, !a.unlocked && { color: Colors.textTertiary }]} numberOfLines={1}>{a.name}</Text>
+                  <Text style={styles.achDesc} numberOfLines={2}>{a.desc}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
         {/* Menu */}
         <View style={styles.menuSection}>
           <TouchableOpacity testID="retake-quiz-btn" style={styles.menuItem} onPress={() => router.push('/questionnaire')}>
@@ -318,4 +349,18 @@ const styles = StyleSheet.create({
   feedbackIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.orangeLight, justifyContent: 'center', alignItems: 'center' },
   feedbackTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
   feedbackSub: { fontSize: 12, color: Colors.textTertiary, marginTop: 2 },
+  // Achievements
+  achCard: { backgroundColor: Colors.surface, borderRadius: 14, padding: 18, borderWidth: 1, borderColor: Colors.border, marginBottom: 16 },
+  achHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  achTitle: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary },
+  achCount: { fontSize: 13, fontWeight: '700', color: Colors.gold, backgroundColor: Colors.orangeLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  achGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  achBadge: { width: '31.5%', padding: 10, borderRadius: 10, alignItems: 'center', gap: 4 },
+  achBadgeUnlocked: { backgroundColor: Colors.orangeLight, borderWidth: 1, borderColor: Colors.gold + '50' },
+  achBadgeLocked: { backgroundColor: Colors.background, borderWidth: 1, borderColor: Colors.border, opacity: 0.6 },
+  achIconWrap: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 2 },
+  achIconWrapUnlocked: { backgroundColor: Colors.gold + '20' },
+  achIconWrapLocked: { backgroundColor: Colors.surface },
+  achName: { fontSize: 11, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center' },
+  achDesc: { fontSize: 9, color: Colors.textTertiary, textAlign: 'center', lineHeight: 12 },
 });

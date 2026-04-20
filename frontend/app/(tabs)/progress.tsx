@@ -72,9 +72,25 @@ export default function ProgressScreen() {
     if (!amt || amt <= 0) return;
     try {
       await api.logEarning({ amount: amt, hustle_id: selectedHustle || undefined, note: logNote });
-      setShowLogModal(false); setLogAmount(''); setLogNote('');
+      setShowLogModal(false);
+      const savedAmount = amt;
+      const savedNote = logNote;
+      setLogAmount(''); setLogNote('');
       const [earningsRes, summaryRes] = await Promise.all([api.getEarnings(), api.getEarningsSummary()]);
       setEarnings(earningsRes.earnings || []); setSummary(summaryRes);
+      // Prompt to share win in community
+      setTimeout(() => {
+        const shareMsg = `Share your $${savedAmount.toFixed(2)} win with the community to inspire others?`;
+        if (Platform.OS === 'web') {
+          if (window.confirm(shareMsg)) {
+            api.createPost({
+              content: savedNote || `Just earned $${savedAmount.toFixed(2)} from my side hustle!`,
+              amount: savedAmount,
+              milestone: savedAmount >= 100 ? 'First $100' : undefined,
+            }).then(() => alert('Posted to community! 🎉')).catch(() => {});
+          }
+        }
+      }, 300);
     } catch (e: any) { alert(e.message || 'Failed'); }
   };
 
