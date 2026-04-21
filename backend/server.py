@@ -1163,11 +1163,20 @@ async def get_plans_list(user: dict = Depends(get_current_user)):
     plans = await db.business_plans.find(
         {"user_id": user["user_id"]}, {"_id": 0, "plan_id": 1, "hustle_id": 1, "title": 1, "overview": 1, "created_at": 1}
     ).sort("created_at", -1).to_list(100)
-    # Enrich with hustle names
+    # Batch-fetch all hustles in one query (avoids N+1)
+    hustle_ids = list({p.get("hustle_id", "") for p in plans if p.get("hustle_id")})
+    hustle_map = {}
+    if hustle_ids:
+        hustles_cursor = db.side_hustles.find(
+            {"hustle_id": {"$in": hustle_ids}},
+            {"_id": 0, "hustle_id": 1, "name": 1, "category": 1}
+        )
+        async for h in hustles_cursor:
+            hustle_map[h["hustle_id"]] = h
     for p in plans:
-        hustle = await db.side_hustles.find_one({"hustle_id": p.get("hustle_id")}, {"_id": 0, "name": 1, "category": 1})
-        p["hustle_name"] = hustle.get("name", "Unknown") if hustle else "Unknown"
-        p["hustle_category"] = hustle.get("category", "General") if hustle else "General"
+        h = hustle_map.get(p.get("hustle_id"))
+        p["hustle_name"] = h.get("name", "Unknown") if h else "Unknown"
+        p["hustle_category"] = h.get("category", "General") if h else "General"
     return {"plans": plans}
 
 # ─── HUSTLE RESEARCH TRACKING ───
@@ -1209,11 +1218,18 @@ async def income_summary(user: dict = Depends(get_current_user)):
     for e in entries:
         hid = e.get("hustle_id", "")
         by_hustle[hid] = by_hustle.get(hid, 0) + e.get("amount", 0)
-    # Enrich with hustle names
-    hustle_breakdown = []
-    for hid, amt in sorted(by_hustle.items(), key=lambda x: -x[1]):
-        h = await db.side_hustles.find_one({"hustle_id": hid}, {"_id": 0, "name": 1})
-        hustle_breakdown.append({"hustle_id": hid, "name": h.get("name", "Unknown") if h else "Unknown", "total": amt})
+    # Batch-fetch all hustle names in one query (avoids N+1)
+    hustle_name_map: Dict[str, str] = {}
+    hustle_ids = [hid for hid in by_hustle.keys() if hid]
+    if hustle_ids:
+        async for h in db.side_hustles.find(
+            {"hustle_id": {"$in": hustle_ids}}, {"_id": 0, "hustle_id": 1, "name": 1}
+        ):
+            hustle_name_map[h["hustle_id"]] = h.get("name", "Unknown")
+    hustle_breakdown = [
+        {"hustle_id": hid, "name": hustle_name_map.get(hid, "Unknown"), "total": amt}
+        for hid, amt in sorted(by_hustle.items(), key=lambda x: -x[1])
+    ]
     return {"total": total, "this_month": this_month, "entries": entries[:20], "by_hustle": hustle_breakdown}
 
 # ─── DAILY TASK (from 30-day plan) ───
