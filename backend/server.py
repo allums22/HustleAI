@@ -417,8 +417,9 @@ async def register(req: RegisterRequest):
 
 @api_router.post("/auth/login")
 async def login(req: LoginRequest, request: Request):
-    # 🔒 Rate limit: 10 login attempts per 5 minutes per IP
-    client_ip = request.client.host if request.client else "unknown"
+    # 🔒 Rate limit: 10 login attempts per 5 minutes per IP (using X-Forwarded-For for K8s ingress)
+    fwd = request.headers.get("x-forwarded-for", "")
+    client_ip = fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "unknown")
     if not await check_rate_limit(f"login_{client_ip}", 10, 300):
         raise HTTPException(status_code=429, detail="Too many login attempts. Please try again in a few minutes.")
     user = await db.users.find_one({"email": req.email}, {"_id": 0})
@@ -2093,7 +2094,7 @@ async def track_event(req: AnalyticsEvent, request: Request):
     auth_header = request.headers.get("authorization", "")
     if auth_header.startswith("Bearer "):
         token = auth_header.replace("Bearer ", "")
-        sess = await db.sessions.find_one({"session_token": token}, {"_id": 0, "user_id": 1})
+        sess = await db.user_sessions.find_one({"session_token": token}, {"_id": 0, "user_id": 1})
         if sess:
             user_id = sess.get("user_id")
     await db.analytics_events.insert_one({
