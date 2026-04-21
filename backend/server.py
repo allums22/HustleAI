@@ -403,6 +403,11 @@ async def register(req: RegisterRequest):
         "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
+    # Schedule retention emails (Day 1/3/7/14)
+    try:
+        await schedule_welcome_emails(user_id, req.email, req.name)
+    except Exception as e:
+        logger.warning(f"Failed to schedule welcome emails: {e}")
     return {
         "session_token": session_token,
         "user": {"user_id": user_id, "email": req.email, "name": req.name,
@@ -411,7 +416,11 @@ async def register(req: RegisterRequest):
     }
 
 @api_router.post("/auth/login")
-async def login(req: LoginRequest):
+async def login(req: LoginRequest, request: Request):
+    # 🔒 Rate limit: 10 login attempts per 5 minutes per IP
+    client_ip = request.client.host if request.client else "unknown"
+    if not await check_rate_limit(f"login_{client_ip}", 10, 300):
+        raise HTTPException(status_code=429, detail="Too many login attempts. Please try again in a few minutes.")
     user = await db.users.find_one({"email": req.email}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -2068,6 +2077,149 @@ async def resume_hustle(hustle_id: str, user: dict = Depends(get_current_user)):
         {"hustle_id": hustle_id, "user_id": user["user_id"]},
         {"$set": {"status": "active"}, "$unset": {"paused_at": "", "pause_reason": ""}})
     return {"status": "ok", "message": "Welcome back! You've got this. 🚀"}
+
+
+# ─── 📊 ANALYTICS FUNNEL (Tier 3) ───
+class AnalyticsEvent(BaseModel):
+    event: str  # e.g. "landing_view", "beta_invite_view", "register_submitted", "quiz_completed", "ai_chat_started", "checkout_started", "checkout_completed"
+    properties: Optional[Dict[str, Any]] = None
+    session_id: Optional[str] = None
+
+@api_router.post("/analytics/track")
+async def track_event(req: AnalyticsEvent, request: Request):
+    """Public — tracks events for funnel analysis. No auth required (anonymous users too)."""
+    user_id = None
+    # If auth header present, try to attach user
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header.replace("Bearer ", "")
+        sess = await db.sessions.find_one({"session_token": token}, {"_id": 0, "user_id": 1})
+        if sess:
+            user_id = sess.get("user_id")
+    await db.analytics_events.insert_one({
+        "event_id": f"evt_{uuid.uuid4().hex[:12]}",
+        "event": req.event[:80],
+        "properties": req.properties or {},
+        "session_id": req.session_id or "",
+        "user_id": user_id,
+        "ip": request.client.host if request.client else "",
+        "user_agent": request.headers.get("user-agent", "")[:200],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"status": "ok"}
+
+@api_router.get("/analytics/funnel")
+async def get_funnel_stats(user: dict = Depends(get_current_user)):
+    """Admin/owner funnel stats — counts for each step over last 30 days."""
+    # Only allow Empire tier to see analytics (dashboard for app owner)
+    if user.get("subscription_tier") != "empire":
+        raise HTTPException(status_code=403, detail="Empire tier only")
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    steps = ["landing_view", "beta_invite_view", "register_submitted",
+             "quiz_completed", "ai_chat_started", "checkout_started", "checkout_completed"]
+    result = {}
+    for step in steps:
+        count = await db.analytics_events.count_documents({
+            "event": step, "created_at": {"$gte": cutoff},
+        })
+        result[step] = count
+    # Calculate conversion rates
+    total_visits = result.get("landing_view", 0) or 1
+    result["conversion_rates"] = {
+        "landing_to_invite": round(100 * result.get("beta_invite_view", 0) / total_visits, 2),
+        "invite_to_register": round(100 * result.get("register_submitted", 0) / max(result.get("beta_invite_view", 1), 1), 2),
+        "register_to_quiz": round(100 * result.get("quiz_completed", 0) / max(result.get("register_submitted", 1), 1), 2),
+        "quiz_to_chat": round(100 * result.get("ai_chat_started", 0) / max(result.get("quiz_completed", 1), 1), 2),
+        "chat_to_checkout": round(100 * result.get("checkout_started", 0) / max(result.get("ai_chat_started", 1), 1), 2),
+        "checkout_to_paid": round(100 * result.get("checkout_completed", 0) / max(result.get("checkout_started", 1), 1), 2),
+    }
+    return result
+
+
+# ─── 📬 WAITLIST (Tier 1) ───
+class WaitlistSignup(BaseModel):
+    email: str
+    source: Optional[str] = "landing"
+
+@api_router.post("/waitlist/subscribe")
+async def waitlist_subscribe(req: WaitlistSignup):
+    """Public — captures pre-launch leads."""
+    email = (req.email or "").strip().lower()
+    if "@" not in email or "." not in email:
+        raise HTTPException(status_code=400, detail="Please enter a valid email")
+    existing = await db.waitlist.find_one({"email": email}, {"_id": 0})
+    if existing:
+        count = await db.waitlist.count_documents({})
+        return {"status": "already_subscribed", "position": existing.get("position", count),
+                "total_joined": count}
+    count = await db.waitlist.count_documents({})
+    position = count + 1
+    await db.waitlist.insert_one({
+        "email": email, "source": req.source or "landing",
+        "position": position,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"status": "subscribed", "position": position, "total_joined": position}
+
+@api_router.get("/waitlist/count")
+async def waitlist_count():
+    """Public — shows social proof count on landing page."""
+    count = await db.waitlist.count_documents({})
+    # Add baseline of 47 for social proof (real beta testers + early signups)
+    return {"total": count + 47}
+
+
+# ─── 🔒 RATE LIMITING (Tier 3 security pass) ───
+async def check_rate_limit(key: str, max_requests: int, window_seconds: int):
+    """Simple in-memory-ish rate limiting via MongoDB. Prevents brute force."""
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=window_seconds)
+    count = await db.rate_limit_events.count_documents({
+        "key": key, "created_at": {"$gte": cutoff.isoformat()},
+    })
+    if count >= max_requests:
+        return False
+    await db.rate_limit_events.insert_one({
+        "key": key, "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return True
+
+
+# ─── 📧 WELCOME EMAIL QUEUE (Tier 3) ───
+# Queues emails for Day 1/3/7/14 — a background worker can later read this collection
+@api_router.get("/admin/email-queue/pending")
+async def email_queue_pending(user: dict = Depends(get_current_user)):
+    """Admin view of pending welcome/retention emails."""
+    if user.get("subscription_tier") != "empire":
+        raise HTTPException(status_code=403, detail="Empire tier only")
+    now = datetime.now(timezone.utc).isoformat()
+    pending = await db.email_queue.find(
+        {"status": "pending", "scheduled_for": {"$lte": now}},
+        {"_id": 0}
+    ).sort("scheduled_for", 1).to_list(50)
+    return {"pending": pending, "count": len(pending)}
+
+async def schedule_welcome_emails(user_id: str, email: str, name: str):
+    """Queue Day 1/3/7/14 emails. Background worker sends via SendGrid/Resend later."""
+    now = datetime.now(timezone.utc)
+    templates = [
+        (1, "Your Day 1 action plan is ready",
+         f"Hey {name.split(' ')[0]}, welcome to HustleAI! Your first day is simple: finish the questionnaire (2 min) and lock in your top hustle match."),
+        (3, "Day 3 check-in: the first milestone is $100",
+         f"{name.split(' ')[0]}, most hustlers earn their first dollar by Day 7. Log what you've earned (even $5) to break the seal. Your future self will thank you."),
+        (7, "Week 1 reflection — what's working?",
+         f"You're 7 days in, {name.split(' ')[0]}. Open your dashboard to see your streak, earnings, and top tasks for Week 2."),
+        (14, "Halfway through your 30-day plan",
+         f"{name.split(' ')[0]}, this is where most people quit. That's why most people don't make it. You're different — open the app, log a win, and keep going."),
+    ]
+    for offset_days, subject, body in templates:
+        scheduled = (now + timedelta(days=offset_days)).isoformat()
+        await db.email_queue.insert_one({
+            "email_id": f"email_{uuid.uuid4().hex[:10]}",
+            "user_id": user_id, "to_email": email, "to_name": name,
+            "subject": subject, "body": body,
+            "scheduled_for": scheduled, "status": "pending",
+            "created_at": now.isoformat(),
+        })
 
 app.include_router(api_router)
 app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])

@@ -161,4 +161,14 @@ export const api = {
     request(`/api/hustles/${hustleId}/pause`, { method: 'POST', body: JSON.stringify({ reason: reason || '' }) }),
   resumeHustle: (hustleId: string) =>
     request(`/api/hustles/${hustleId}/resume`, { method: 'POST' }),
+
+  // 📊 Analytics funnel
+  trackEvent: (event: string, properties?: Record<string, any>, sessionId?: string) =>
+    request('/api/analytics/track', { method: 'POST', body: JSON.stringify({ event, properties: properties || {}, session_id: sessionId || '' }) }).catch(() => null),
+  getFunnel: () => request('/api/analytics/funnel'),
+
+  // 📬 Waitlist
+  subscribeWaitlist: (email: string, source?: string) =>
+    request('/api/waitlist/subscribe', { method: 'POST', body: JSON.stringify({ email, source: source || 'landing' }) }),
+  getWaitlistCount: () => request('/api/waitlist/count'),
 };

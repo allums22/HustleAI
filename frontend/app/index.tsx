@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Platform,
 } from 'react-native';
@@ -7,12 +7,23 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../src/colors';
 import { useAuth } from '../src/context/AuthContext';
+import { api } from '../src/api';
 
 export default function HomeScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [position, setPosition] = useState<number | null>(null);
+  const [totalJoined, setTotalJoined] = useState<number>(47);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  // Track landing view + fetch social proof count
+  useEffect(() => {
+    api.trackEvent('landing_view', { path: '/' });
+    api.getWaitlistCount().then((r: any) => setTotalJoined(r.total || 47)).catch(() => {});
+  }, []);
 
   // If already logged in, go to dashboard
   if (user) {
@@ -20,11 +31,31 @@ export default function HomeScreen() {
     return null;
   }
 
-  const handleNotify = () => {
-    if (email.includes('@')) {
-      setSubscribed(true);
-      setEmail('');
+  const handleNotify = async () => {
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed.includes('@') || !trimmed.includes('.')) {
+      setErrorMsg('Please enter a valid email');
+      return;
     }
+    setErrorMsg('');
+    setSubmitting(true);
+    try {
+      const res: any = await api.subscribeWaitlist(trimmed, 'landing');
+      setSubscribed(true);
+      setPosition(res.position || null);
+      setTotalJoined(res.total_joined || totalJoined + 1);
+      setEmail('');
+      api.trackEvent('waitlist_subscribed', { email: trimmed });
+    } catch (e: any) {
+      setErrorMsg(e.message || 'Could not subscribe. Try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleBetaClick = () => {
+    api.trackEvent('beta_invite_view', { source: 'landing_nav' });
+    router.push('/beta-invite');
   };
 
   return (
@@ -36,7 +67,7 @@ export default function HomeScreen() {
             <View style={s.logoDot} />
             <Text style={s.logoText}>HustleAI</Text>
           </View>
-          <TouchableOpacity style={s.betaLink} onPress={() => router.push('/beta-invite')}>
+          <TouchableOpacity style={s.betaLink} onPress={handleBetaClick}>
             <Text style={s.betaLinkText}>Beta Tester?</Text>
           </TouchableOpacity>
         </View>
@@ -55,6 +86,18 @@ export default function HomeScreen() {
           <Text style={s.heroSub}>
             HustleAI discovers personalized side hustles, generates 30-day business plans, builds launch-ready landing pages, and gives you a team of AI agents to grow your income.
           </Text>
+
+          {/* Social proof — live waitlist count */}
+          <View style={s.socialProof}>
+            <View style={s.socialDots}>
+              <View style={[s.avatarDot, { backgroundColor: '#E5A93E', marginLeft: 0 }]} />
+              <View style={[s.avatarDot, { backgroundColor: '#14B8A6', marginLeft: -8 }]} />
+              <View style={[s.avatarDot, { backgroundColor: '#EC4899', marginLeft: -8 }]} />
+            </View>
+            <Text style={s.socialText}>
+              <Text style={s.socialNumber}>{totalJoined.toLocaleString()}</Text> hustlers already joined
+            </Text>
+          </View>
         </View>
 
         {/* Feature Preview Cards */}
@@ -109,46 +152,44 @@ export default function HomeScreen() {
           {subscribed ? (
             <View style={s.subscribedBox}>
               <Ionicons name="checkmark-circle" size={20} color={Colors.growthGreenText} />
-              <Text style={s.subscribedText}>You're on the list! We'll notify you at launch.</Text>
+              <Text style={s.subscribedText}>
+                You're #{position || totalJoined} on the waitlist! We'll notify you at launch.
+              </Text>
             </View>
           ) : (
-            <View style={s.emailInputRow}>
-              <TextInput
-                style={s.emailInput}
-                placeholder="you@email.com"
-                placeholderTextColor={Colors.textTertiary}
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                onSubmitEditing={handleNotify}
-              />
-              <TouchableOpacity style={s.emailBtn} onPress={handleNotify} activeOpacity={0.85}>
-                <Text style={s.emailBtnText}>Notify Me</Text>
-              </TouchableOpacity>
-            </View>
+            <>
+              <View style={s.emailInputRow}>
+                <TextInput
+                  style={s.emailInput}
+                  placeholder="you@email.com"
+                  placeholderTextColor={Colors.textTertiary}
+                  value={email}
+                  onChangeText={(t) => { setEmail(t); if (errorMsg) setErrorMsg(''); }}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  editable={!submitting}
+                  onSubmitEditing={handleNotify}
+                />
+                <TouchableOpacity
+                  testID="waitlist-btn"
+                  style={[s.emailBtn, submitting && { opacity: 0.6 }]}
+                  onPress={handleNotify}
+                  activeOpacity={0.85}
+                  disabled={submitting}
+                >
+                  <Text style={s.emailBtnText}>{submitting ? 'Joining…' : 'Notify Me'}</Text>
+                </TouchableOpacity>
+              </View>
+              {errorMsg ? <Text style={s.errorMsg}>{errorMsg}</Text> : null}
+            </>
           )}
-        </View>
-
-        {/* Stats Teaser */}
-        <View style={s.statsRow}>
-          {[
-            { label: 'Side Hustles', value: '100+' },
-            { label: 'AI Agents', value: '4' },
-            { label: 'Days to Launch', value: '30' },
-          ].map((stat, i) => (
-            <View key={i} style={s.statBox}>
-              <Text style={s.statValue}>{stat.value}</Text>
-              <Text style={s.statLabel}>{stat.label}</Text>
-            </View>
-          ))}
         </View>
 
         {/* Footer */}
         <View style={s.footer}>
           <Text style={s.footerDomain}>hustleai.live</Text>
           <Text style={s.footerCompany}>A nexus28 product</Text>
-          <TouchableOpacity onPress={() => router.push('/beta-invite')}>
+          <TouchableOpacity onPress={handleBetaClick}>
             <Text style={s.footerBeta}>Beta Tester Access →</Text>
           </TouchableOpacity>
         </View>
@@ -175,6 +216,14 @@ const s = StyleSheet.create({
   heroTitle: { fontSize: 42, fontWeight: '900', color: '#FAFAFA', textAlign: 'center', letterSpacing: -2, lineHeight: 46, marginBottom: 20 },
   heroGold: { color: Colors.gold },
   heroSub: { fontSize: 16, color: '#71717A', textAlign: 'center', lineHeight: 24, maxWidth: 400, paddingHorizontal: 12 },
+  // Social proof
+  socialProof: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 20, backgroundColor: '#111113', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#1F1F23' },
+  socialDots: { flexDirection: 'row' },
+  avatarDot: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#050505' },
+  socialText: { fontSize: 12, fontWeight: '600', color: '#A1A1AA' },
+  socialNumber: { color: Colors.gold, fontWeight: '800' },
+  // Error
+  errorMsg: { fontSize: 13, color: '#F87171', marginTop: 8, fontWeight: '600' },
   // Sneak Peek
   previewSection: { paddingHorizontal: 24, paddingVertical: 40 },
   sectionTag: { fontSize: 11, fontWeight: '700', color: Colors.gold, letterSpacing: 2, marginBottom: 8 },
