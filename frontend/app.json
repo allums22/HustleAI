@@ -1,17 +1,20 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "HustleAI",
+    "slug": "hustleai",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
+    "scheme": "hustleai",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "description": "Turn your skills into side-hustle income with AI-powered business plans, launch kits, and agent coaches.",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "live.hustleai.app"
     },
     "android": {
+      "package": "live.hustleai.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000"
