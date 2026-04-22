@@ -394,7 +394,17 @@ metadata:
   test_sequence: 1
   run_ui: false
 
-  - task: "LAUNCH POLISH — Tier 1/2/3 (OG tags, Waitlist, Analytics, Rate Limiting, Welcome Emails)"
+  - task: "PWA Infrastructure (Progressive Web App — installable to home screen)"
+    implemented: true
+    working: true
+    file: "/app/frontend/public/manifest.json, /app/frontend/public/sw.js, /app/frontend/src/components/InstallPrompt.tsx, /app/frontend/app/+html.tsx, /app/frontend/app/_layout.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "main"
+        - comment: "Complete PWA infrastructure so users can install HustleAI directly to their phone home screen without App Store. (1) /public/manifest.json — standalone display mode, portrait orientation, black theme, 192/512 icons (any + maskable), 3 app shortcuts (Dashboard, Log Earning, My Hustles). Verified HTTP 200 with application/json content-type. (2) /public/sw.js — HustleAI service worker v1.0.0 with cache-first strategy for static assets, network-only for /api/, offline fallback to cached root, push notification + notificationclick handlers (for future use). Verified HTTP 200 with application/javascript content-type. (3) Apple PWA meta tags in +html.tsx — apple-mobile-web-app-capable, apple-mobile-web-app-status-bar-style (black-translucent), apple-mobile-web-app-title, application-name (HustleAI), multiple apple-touch-icon sizes (180/152/120). (4) Service worker auto-registration script injected via +html.tsx (fires on window load). (5) InstallPrompt component mounted globally in _layout.tsx — smart 5-second delayed trigger, detects iOS via userAgent for manual 'Share → Add to Home Screen' instructions modal, captures beforeinstallprompt event on Chrome/Android for native prompt, 7-day re-prompt cooldown via localStorage, analytics tracking for pwa_install_prompt_shown/accepted/dismissed and pwa_installed events. UI: bottom banner with app icon + Install button + dismiss X, iOS modal with numbered steps showing share icon and 'Add to Home Screen' bold text. Tested: all meta tags render in HTML, manifest + sw.js accessible at correct URLs, service worker API detected."
     implemented: true
     working: false
     file: "/app/backend/server.py, /app/frontend/app/+html.tsx, /app/frontend/app/index.tsx, /app/frontend/src/api.ts, /app/frontend/app.json"

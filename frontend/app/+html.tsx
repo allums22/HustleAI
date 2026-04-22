@@ -15,8 +15,22 @@ export default function Root({ children }: PropsWithChildren) {
         <title>HustleAI — Your AI Team for Building Side Hustles</title>
         <meta name="description" content="Discover personalized side hustles, generate 30-day business plans, launch landing pages in 60 seconds, and grow your income with an AI team of agents." />
         <meta name="theme-color" content="#000000" />
+
+        {/* ─── PWA Manifest + Icons ─── */}
+        <link rel="manifest" href="/manifest.json" />
         <link rel="icon" type="image/png" href="/assets/images/favicon.png" />
         <link rel="apple-touch-icon" href="/assets/images/icon.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/assets/images/icon.png" />
+        <link rel="apple-touch-icon" sizes="152x152" href="/assets/images/icon.png" />
+        <link rel="apple-touch-icon" sizes="120x120" href="/assets/images/icon.png" />
+
+        {/* ─── Apple PWA Config ─── */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="HustleAI" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="application-name" content="HustleAI" />
+        <meta name="format-detection" content="telephone=no" />
 
         {/* Open Graph */}
         <meta property="og:type" content="website" />
@@ -65,6 +79,21 @@ export default function Root({ children }: PropsWithChildren) {
         }}
       >
         {children}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/sw.js').then(function(reg) {
+                    console.log('[PWA] Service worker registered', reg.scope);
+                  }).catch(function(err) {
+                    console.warn('[PWA] Service worker failed', err);
+                  });
+                });
+              }
+            `,
+          }}
+        />
       </body>
     </html>
   );

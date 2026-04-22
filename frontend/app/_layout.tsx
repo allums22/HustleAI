@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import { AuthProvider } from '../src/context/AuthContext';
 import { StatusBar } from 'expo-status-bar';
+import { InstallPrompt } from '../src/components/InstallPrompt';
 
 export default function RootLayout() {
   return (
@@ -24,6 +25,7 @@ export default function RootLayout() {
         <Stack.Screen name="feedback" />
         <Stack.Screen name="s/[id]" />
       </Stack>
+      <InstallPrompt />
     </AuthProvider>
   );
 }
