@@ -41,6 +41,12 @@ export default function LoginScreen() {
     }
   };
 
+  const handleGoogleSignIn = () => {
+    if (Platform.OS !== 'web') return;
+    const redirect = `${window.location.origin}/auth-callback`;
+    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirect)}`;
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView
@@ -146,6 +152,17 @@ const styles = StyleSheet.create({
   submitBtn: { backgroundColor: Colors.trustBlue, paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginTop: 8 },
   btnDisabled: { opacity: 0.6 },
   submitBtnText: { fontSize: 16, fontWeight: '700', color: Colors.textOnColor },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 6 },
+  divLine: { flex: 1, height: 1, backgroundColor: Colors.border },
+  divText: { fontSize: 11, fontWeight: '700', color: Colors.textTertiary, letterSpacing: 1 },
+  googleBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: Colors.surface, paddingVertical: 14, borderRadius: 12, borderWidth: 1.5, borderColor: Colors.border },
+  googleBtnText: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
+  footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, marginTop: 32 },
+  footerText: { fontSize: 14, color: Colors.textSecondary },
+  footerLink: { fontSize: 14, fontWeight: '700', color: Colors.trustBlue },
+});
+erRadius: 12, borderWidth: 1.5, borderColor: Colors.border },
+  googleBtnText: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, marginTop: 32 },
   footerText: { fontSize: 14, color: Colors.textSecondary },
   footerLink: { fontSize: 14, fontWeight: '700', color: Colors.trustBlue },
