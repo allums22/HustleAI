@@ -7,6 +7,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { api } from '../../src/api';
 import { Colors } from '../../src/colors';
 import * as Clipboard from 'expo-clipboard';
+import { subscribeToPush, isPushSupported, getNotificationPermission } from '../../src/push';
 
 export default function ProfileScreen() {
   const { user, logout, refreshUser } = useAuth();
@@ -18,8 +19,33 @@ export default function ProfileScreen() {
   const [promoCode, setPromoCode] = useState('');
   const [promoLoading, setPromoLoading] = useState(false);
   const [promoResult, setPromoResult] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const [pushStatus, setPushStatus] = useState<'granted' | 'denied' | 'default' | 'unsupported'>('default');
+  const [pushLoading, setPushLoading] = useState(false);
 
-  useEffect(() => { loadProfile(); }, []);
+  useEffect(() => {
+    loadProfile();
+    // Check push permission on mount
+    const perm = getNotificationPermission();
+    setPushStatus(perm as any);
+  }, []);
+
+  const handleEnablePush = async () => {
+    setPushLoading(true);
+    try {
+      const res = await subscribeToPush();
+      if (res.ok) {
+        setPushStatus('granted');
+        // Send test notification so user knows it works
+        try { await api.sendTestPush(); } catch {}
+      } else {
+        const newPerm = getNotificationPermission();
+        setPushStatus(newPerm as any);
+        if (res.error && res.error !== 'Notifications denied') {
+          alert(res.error);
+        }
+      }
+    } finally { setPushLoading(false); }
+  };
 
   const loadProfile = async () => {
     try {
@@ -181,6 +207,37 @@ export default function ProfileScreen() {
             <Text style={styles.shareBtnText}>Share Referral Link</Text>
           </TouchableOpacity>
         </View>
+
+        {/* 🔔 Push Notifications */}
+        {isPushSupported() && (
+          <View style={styles.notifCard}>
+            <View style={styles.notifHeader}>
+              <View style={styles.notifIconBox}>
+                <Ionicons name="notifications" size={22} color={pushStatus === 'granted' ? Colors.growthGreen : Colors.gold} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.notifTitle}>
+                  {pushStatus === 'granted' ? 'Notifications are ON' : 'Enable Notifications'}
+                </Text>
+                <Text style={styles.notifSub}>
+                  {pushStatus === 'granted'
+                    ? 'Daily reminders, streak warnings, and win alerts'
+                    : pushStatus === 'denied'
+                    ? 'You\'ve blocked notifications. Enable in browser settings.'
+                    : 'Stay on track with daily check-in reminders and streak alerts'}
+                </Text>
+              </View>
+              {pushStatus !== 'granted' && pushStatus !== 'denied' && (
+                <TouchableOpacity testID="enable-push-btn" style={styles.notifEnableBtn} onPress={handleEnablePush} disabled={pushLoading}>
+                  {pushLoading ? <ActivityIndicator color={Colors.background} size="small" /> : <Text style={styles.notifEnableText}>Turn On</Text>}
+                </TouchableOpacity>
+              )}
+              {pushStatus === 'granted' && (
+                <Ionicons name="checkmark-circle" size={24} color={Colors.growthGreen} />
+              )}
+            </View>
+          </View>
+        )}
 
         {/* Achievements */}
         {achievements.length > 0 && (
@@ -349,6 +406,14 @@ const styles = StyleSheet.create({
   feedbackIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.orangeLight, justifyContent: 'center', alignItems: 'center' },
   feedbackTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
   feedbackSub: { fontSize: 12, color: Colors.textTertiary, marginTop: 2 },
+  // Notifications opt-in
+  notifCard: { backgroundColor: Colors.surface, borderRadius: 14, padding: 16, borderWidth: 1.5, borderColor: Colors.gold + '40', marginBottom: 16 },
+  notifHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  notifIconBox: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.orangeLight, justifyContent: 'center', alignItems: 'center' },
+  notifTitle: { fontSize: 15, fontWeight: '800', color: Colors.textPrimary },
+  notifSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 2, lineHeight: 16 },
+  notifEnableBtn: { backgroundColor: Colors.gold, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, minWidth: 70, alignItems: 'center' },
+  notifEnableText: { fontSize: 13, fontWeight: '800', color: Colors.background },
   // Achievements
   achCard: { backgroundColor: Colors.surface, borderRadius: 14, padding: 18, borderWidth: 1, borderColor: Colors.border, marginBottom: 16 },
   achHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },

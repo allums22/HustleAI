@@ -22,8 +22,19 @@ const isStandalone = () => {
 
 // Session storage key to throttle prompts
 const DISMISSED_KEY = 'hustleai_install_dismissed_at';
-const SHOW_AFTER_MS = 5000; // show after 5s of active engagement
+const FIRST_VISIT_KEY = 'hustleai_first_visit_at';
+const VISIT_COUNT_KEY = 'hustleai_visit_count';
 const REPROMPT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+// Smart triggers — lowest acceptable friction for highest accept rate
+const RETURN_VISIT_DELAY_MS = 2500;   // returning users convert best — show fast
+const ENGAGED_ACTION_DELAY_MS = 800;  // after user clicks CTA or scrolls — highest intent
+const FALLBACK_DELAY_MS = 15000;      // if no engagement signal, prompt at 15s
+
+// Public API — let any component fire "engaged action" to trigger prompt
+declare global {
+  interface Window { __hustleMarkEngaged?: () => void; }
+}
 
 export function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -32,36 +43,91 @@ export function InstallPrompt() {
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
-    if (isStandalone()) return; // already installed, no prompt
+    if (isStandalone()) return;
 
-    // Check cooldown
+    // Cooldown check
     const dismissedAt = localStorage.getItem(DISMISSED_KEY);
     if (dismissedAt && Date.now() - parseInt(dismissedAt) < REPROMPT_COOLDOWN_MS) return;
 
-    // Android/Chrome — capture native prompt event
-    const handler = (e: any) => {
+    // Track visit count + first-visit
+    const now = Date.now();
+    const first = localStorage.getItem(FIRST_VISIT_KEY);
+    if (!first) localStorage.setItem(FIRST_VISIT_KEY, String(now));
+    const visitCount = parseInt(localStorage.getItem(VISIT_COUNT_KEY) || '0', 10) + 1;
+    localStorage.setItem(VISIT_COUNT_KEY, String(visitCount));
+    const isReturnVisit = visitCount >= 2;
+
+    let triggered = false;
+    let scheduledTimer: any = null;
+    const triggerPrompt = (reason: string) => {
+      if (triggered) return;
+      triggered = true;
+      if (scheduledTimer) clearTimeout(scheduledTimer);
+      api.trackEvent('pwa_banner_triggered', { reason, visit_count: visitCount });
+      setShowBanner(true);
+    };
+
+    // Android/Chrome native install event
+    const beforePromptHandler = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      setTimeout(() => setShowBanner(true), SHOW_AFTER_MS);
+      // Immediately fire best-timed prompt
+      const delay = isReturnVisit ? RETURN_VISIT_DELAY_MS : FALLBACK_DELAY_MS;
+      scheduledTimer = setTimeout(() => triggerPrompt('native_event_ready'), delay);
     };
-    window.addEventListener('beforeinstallprompt', handler);
+    window.addEventListener('beforeinstallprompt', beforePromptHandler);
 
-    // iOS — show manual instructions after delay
+    // iOS timing (no native event)
     if (isIos()) {
-      setTimeout(() => setShowBanner(true), SHOW_AFTER_MS);
+      const delay = isReturnVisit ? RETURN_VISIT_DELAY_MS : FALLBACK_DELAY_MS;
+      scheduledTimer = setTimeout(() => triggerPrompt('ios_timed'), delay);
+    } else if (!window.matchMedia('(display-mode: standalone)').matches) {
+      // Desktop/browsers that may not fire beforeinstallprompt fast — fallback
+      scheduledTimer = setTimeout(() => {
+        if (deferredPrompt || isIos()) triggerPrompt('fallback_timed');
+      }, FALLBACK_DELAY_MS);
     }
 
-    // When installed, hide banner
+    // Expose engaged-action trigger globally
+    window.__hustleMarkEngaged = () => {
+      if (triggered) return;
+      if (!deferredPrompt && !isIos()) return; // don't fire if install isn't possible
+      setTimeout(() => triggerPrompt('engaged_action'), ENGAGED_ACTION_DELAY_MS);
+    };
+
+    // Scroll-depth trigger — 50% scroll = engaged signal
+    let scrollTriggered = false;
+    const handleScroll = () => {
+      if (scrollTriggered || triggered) return;
+      const scrollPct = (window.scrollY + window.innerHeight) / document.documentElement.scrollHeight;
+      if (scrollPct >= 0.5) {
+        scrollTriggered = true;
+        if (window.__hustleMarkEngaged) window.__hustleMarkEngaged();
+      }
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    // Click-any-CTA trigger
+    const clickHandler = (e: any) => {
+      const el = e.target?.closest?.('button, a, [role="button"]');
+      if (el && window.__hustleMarkEngaged) window.__hustleMarkEngaged();
+    };
+    document.addEventListener('click', clickHandler);
+
+    // When installed
     const installedHandler = () => {
       setShowBanner(false);
       setShowIosModal(false);
-      api.trackEvent('pwa_installed', { platform: isIos() ? 'ios' : 'android' });
+      api.trackEvent('pwa_installed', { platform: isIos() ? 'ios' : 'android', visit_count: visitCount });
     };
     window.addEventListener('appinstalled', installedHandler);
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', handler);
+      window.removeEventListener('beforeinstallprompt', beforePromptHandler);
+      window.removeEventListener('scroll', handleScroll);
+      document.removeEventListener('click', clickHandler);
       window.removeEventListener('appinstalled', installedHandler);
+      if (scheduledTimer) clearTimeout(scheduledTimer);
     };
   }, []);
 

@@ -2222,6 +2222,106 @@ async def schedule_welcome_emails(user_id: str, email: str, name: str):
             "created_at": now.isoformat(),
         })
 
+
+# ─── 🔔 PUSH NOTIFICATIONS ───
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "").replace("\\n", "\n")
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
+VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "mailto:support@hustleai.live")
+
+try:
+    from pywebpush import webpush, WebPushException
+    PUSH_ENABLED = bool(VAPID_PRIVATE_KEY and VAPID_PUBLIC_KEY)
+except Exception:
+    PUSH_ENABLED = False
+    logger.warning("pywebpush not available — push notifications disabled")
+
+
+class PushSubscription(BaseModel):
+    endpoint: str
+    keys: Dict[str, str]  # {p256dh, auth}
+
+@api_router.get("/push/vapid-public-key")
+async def get_vapid_public_key():
+    return {"public_key": VAPID_PUBLIC_KEY, "enabled": PUSH_ENABLED}
+
+@api_router.post("/push/subscribe")
+async def push_subscribe(sub: PushSubscription, user: dict = Depends(get_current_user)):
+    await db.push_subscriptions.update_one(
+        {"user_id": user["user_id"], "endpoint": sub.endpoint},
+        {"$set": {
+            "user_id": user["user_id"], "endpoint": sub.endpoint,
+            "p256dh": sub.keys.get("p256dh"), "auth": sub.keys.get("auth"),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }}, upsert=True)
+    return {"status": "subscribed"}
+
+@api_router.post("/push/unsubscribe")
+async def push_unsubscribe(sub: PushSubscription, user: dict = Depends(get_current_user)):
+    await db.push_subscriptions.delete_one(
+        {"user_id": user["user_id"], "endpoint": sub.endpoint})
+    return {"status": "unsubscribed"}
+
+async def send_push_to_user(user_id: str, title: str, body: str, url: str = "/") -> int:
+    if not PUSH_ENABLED:
+        return 0
+    subs = await db.push_subscriptions.find({"user_id": user_id}).to_list(10)
+    sent = 0
+    for sub in subs:
+        try:
+            webpush(
+                subscription_info={
+                    "endpoint": sub["endpoint"],
+                    "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]},
+                },
+                data=json.dumps({"title": title, "body": body, "url": url}),
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims={"sub": VAPID_SUBJECT},
+            )
+            sent += 1
+        except WebPushException as e:
+            if hasattr(e, 'response') and e.response is not None and e.response.status_code in (404, 410):
+                await db.push_subscriptions.delete_one({"_id": sub["_id"]})
+            logger.warning(f"Push failed for {user_id}: {e}")
+        except Exception as e:
+            logger.error(f"Push error for {user_id}: {e}")
+    return sent
+
+@api_router.post("/push/send-test")
+async def push_send_test(user: dict = Depends(get_current_user)):
+    if not PUSH_ENABLED:
+        raise HTTPException(status_code=503, detail="Push notifications not configured")
+    sent = await send_push_to_user(
+        user["user_id"],
+        "🚀 HustleAI notifications are ON",
+        "You'll get daily check-in reminders, streak warnings, and win alerts.",
+        "/dashboard",
+    )
+    return {"status": "ok", "devices_notified": sent}
+
+@api_router.post("/push/triggers/daily-reminders")
+async def trigger_daily_reminders(request: Request):
+    secret = request.headers.get("x-trigger-secret", "")
+    if secret != os.environ.get("JWT_SECRET", ""):
+        raise HTTPException(status_code=403, detail="Invalid trigger secret")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    sent_total = 0
+    cursor = db.users.find({"questionnaire_completed": True}, {"_id": 0, "user_id": 1, "name": 1})
+    async for u in cursor:
+        uid = u["user_id"]
+        already = await db.checkins.find_one({"user_id": uid, "date": today})
+        if already:
+            continue
+        streak = await db.task_completions.count_documents({"user_id": uid})
+        if streak < 3:
+            continue
+        name = (u.get("name", "Hustler") or "Hustler").split(" ")[0]
+        sent = await send_push_to_user(
+            uid, f"☀️ Ready, {name}?",
+            "Quick 5-second check-in to keep your streak alive.", "/dashboard",
+        )
+        sent_total += sent
+    return {"status": "ok", "total_sent": sent_total}
+
 app.include_router(api_router)
 app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 

@@ -171,4 +171,12 @@ export const api = {
   subscribeWaitlist: (email: string, source?: string) =>
     request('/api/waitlist/subscribe', { method: 'POST', body: JSON.stringify({ email, source: source || 'landing' }) }),
   getWaitlistCount: () => request('/api/waitlist/count'),
+
+  // 🔔 Push Notifications
+  getVapidKey: () => request('/api/push/vapid-public-key'),
+  subscribePush: (sub: { endpoint: string; keys: any }) =>
+    request('/api/push/subscribe', { method: 'POST', body: JSON.stringify(sub) }),
+  unsubscribePush: (sub: { endpoint: string; keys: any }) =>
+    request('/api/push/unsubscribe', { method: 'POST', body: JSON.stringify(sub) }),
+  sendTestPush: () => request('/api/push/send-test', { method: 'POST' }),
 };

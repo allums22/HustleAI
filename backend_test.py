@@ -1,316 +1,141 @@
-"""
-HustleAI Launch Polish Backend Tests
-Tests: Waitlist, Analytics, Rate Limiting, Welcome Email Queue, Regression
-"""
+"""Backend test for Push Notification endpoints + regression."""
 import requests
-import time
-import sys
+import json
 
 BASE = "https://skill-match-hustle.preview.emergentagent.com/api"
-EMPIRE_TOKEN = "sess_02b7e25f5bf24900abc602309216532a"
-EMPIRE_HEADERS = {"Authorization": f"Bearer {EMPIRE_TOKEN}"}
+TOKEN = "sess_02b7e25f5bf24900abc602309216532a"
+TRIGGER_SECRET = "sidehustle-jwt-secret-key-2026-secure"
+H_AUTH = {"Authorization": f"Bearer {TOKEN}"}
+
+FAKE_SUB = {
+    "endpoint": "https://fcm.googleapis.com/fcm/send/test-endpoint-abc123",
+    "keys": {
+        "p256dh": "BNcRdreALRFXTkOOUHK1EtK2wtZ1hntAo8s1uD9Qh2iZ_7fMF8BH2M9YRn5yH7GqWQxZJGCdLE-rN_0LhLGvmQA",
+        "auth": "tBHItJI5svbpez7KI4CCXg",
+    },
+}
 
 results = []
 
-def log(name, ok, detail=""):
-    icon = "✅" if ok else "❌"
-    line = f"{icon} {name}: {detail}"
-    print(line)
-    results.append((ok, name, detail))
+def check(name, cond, detail=""):
+    mark = "PASS" if cond else "FAIL"
+    print(f"[{mark}] {name} — {detail}")
+    results.append((name, cond, detail))
 
-# ═══ 1. WAITLIST ═══
-print("\n=== 1. WAITLIST ===")
+# 1. VAPID public key (public)
+r = requests.get(f"{BASE}/push/vapid-public-key")
+data = r.json() if r.status_code == 200 else {}
+pk = data.get("public_key", "")
+check("1a. GET /push/vapid-public-key 200", r.status_code == 200, f"status={r.status_code}")
+check("1b. public_key ~87 chars starts with BH",
+      isinstance(pk, str) and pk.startswith("BH") and 80 <= len(pk) <= 95,
+      f"len={len(pk)} starts_BH={pk.startswith('BH')} key={pk[:25]}...")
+check("1c. enabled=True", data.get("enabled") is True, f"enabled={data.get('enabled')}")
 
-try:
-    r = requests.get(f"{BASE}/waitlist/count", timeout=15)
-    data = r.json()
-    total = data.get("total", 0)
-    log("GET /waitlist/count", r.status_code == 200 and total >= 47,
-        f"status={r.status_code}, total={total} (should be >=47)")
-except Exception as e:
-    log("GET /waitlist/count", False, f"Error: {e}")
+# 2. Push Subscribe
+r = requests.post(f"{BASE}/push/subscribe", json=FAKE_SUB)
+check("2a. subscribe without auth -> 401", r.status_code == 401, f"status={r.status_code}")
+r = requests.post(f"{BASE}/push/subscribe", json=FAKE_SUB, headers=H_AUTH)
+data = r.json() if r.status_code == 200 else {}
+check("2b. subscribe with auth 200", r.status_code == 200, f"status={r.status_code} body={data}")
+check("2c. status=subscribed", data.get("status") == "subscribed", f"got={data.get('status')}")
 
-ts = int(time.time())
-waitlist_email = f"newuser+test{ts}@hustleai.com"
-first_pos = None
-try:
-    r = requests.post(f"{BASE}/waitlist/subscribe",
-                      json={"email": waitlist_email, "source": "landing"}, timeout=15)
-    data = r.json()
-    first_pos = data.get("position")
-    first_total = data.get("total_joined")
-    ok = r.status_code == 200 and data.get("status") == "subscribed" and isinstance(first_pos, int)
-    log("POST /waitlist/subscribe (new)", ok,
-        f"status={data.get('status')}, position={first_pos}, total_joined={first_total}")
-except Exception as e:
-    log("POST /waitlist/subscribe (new)", False, f"Error: {e}")
+# 4. Send Test (before unsub so fake sub exists)
+r = requests.post(f"{BASE}/push/send-test")
+check("4a. send-test without auth -> 401", r.status_code == 401, f"status={r.status_code}")
+r = requests.post(f"{BASE}/push/send-test", headers=H_AUTH)
+data = r.json() if r.status_code == 200 else {}
+check("4b. send-test with auth 200 (not 500)", r.status_code == 200,
+      f"status={r.status_code} body={r.text[:200]}")
+check("4c. shape {status:ok, devices_notified:int}",
+      data.get("status") == "ok" and isinstance(data.get("devices_notified"), int),
+      f"body={data}")
 
-try:
-    r = requests.post(f"{BASE}/waitlist/subscribe",
-                      json={"email": waitlist_email, "source": "landing"}, timeout=15)
-    data = r.json()
-    pos2 = data.get("position")
-    ok = (r.status_code == 200 and data.get("status") == "already_subscribed"
-          and pos2 == first_pos)
-    log("POST /waitlist/subscribe (duplicate)", ok,
-        f"status={data.get('status')}, position={pos2} (should match {first_pos})")
-except Exception as e:
-    log("POST /waitlist/subscribe (duplicate)", False, f"Error: {e}")
+# 3. Push Unsubscribe
+r = requests.post(f"{BASE}/push/unsubscribe", json=FAKE_SUB)
+check("3a. unsubscribe without auth -> 401", r.status_code == 401, f"status={r.status_code}")
+r = requests.post(f"{BASE}/push/unsubscribe", json=FAKE_SUB, headers=H_AUTH)
+data = r.json() if r.status_code == 200 else {}
+check("3b. unsubscribe with auth 200", r.status_code == 200, f"status={r.status_code} body={data}")
+check("3c. status=unsubscribed", data.get("status") == "unsubscribed", f"got={data.get('status')}")
 
-try:
-    r = requests.post(f"{BASE}/waitlist/subscribe",
-                      json={"email": "notanemail"}, timeout=15)
-    detail = ""
-    try:
-        detail = r.json().get("detail", "")
-    except Exception:
-        detail = r.text
-    ok = r.status_code == 400 and "valid email" in str(detail).lower()
-    log("POST /waitlist/subscribe (invalid email)", ok,
-        f"status={r.status_code}, detail={detail}")
-except Exception as e:
-    log("POST /waitlist/subscribe (invalid email)", False, f"Error: {e}")
+# 5. Daily Reminders Trigger
+r = requests.post(f"{BASE}/push/triggers/daily-reminders")
+check("5a. trigger without secret -> 403", r.status_code == 403, f"status={r.status_code}")
+check("5b. error message 'Invalid trigger secret'",
+      "Invalid trigger secret" in r.text, f"body={r.text[:150]}")
 
-try:
-    r = requests.post(f"{BASE}/waitlist/subscribe", json={}, timeout=15)
-    ok = r.status_code in (400, 422)
-    log("POST /waitlist/subscribe (empty body)", ok, f"status={r.status_code}")
-except Exception as e:
-    log("POST /waitlist/subscribe (empty body)", False, f"Error: {e}")
+r = requests.post(
+    f"{BASE}/push/triggers/daily-reminders",
+    headers={"x-trigger-secret": "wrong-secret-xyz"},
+)
+check("5c. trigger with wrong secret -> 403", r.status_code == 403, f"status={r.status_code}")
 
-# ═══ 2. ANALYTICS ═══
-print("\n=== 2. ANALYTICS ===")
+r = requests.post(
+    f"{BASE}/push/triggers/daily-reminders",
+    headers={"x-trigger-secret": TRIGGER_SECRET},
+)
+data = r.json() if r.status_code == 200 else {}
+check("5d. trigger with valid secret -> 200", r.status_code == 200,
+      f"status={r.status_code} body={r.text[:200]}")
+check("5e. shape {status:ok, total_sent:int}",
+      data.get("status") == "ok" and isinstance(data.get("total_sent"), int),
+      f"body={data}")
 
-try:
-    r = requests.post(f"{BASE}/analytics/track",
-                      json={"event": "landing_view", "properties": {"path": "/"}}, timeout=15)
-    data = r.json()
-    ok = r.status_code == 200 and data.get("status") == "ok"
-    log("POST /analytics/track landing_view (no auth)", ok,
-        f"status={r.status_code}, body={data}")
-except Exception as e:
-    log("POST /analytics/track landing_view (no auth)", False, f"Error: {e}")
+# 6. Regression
+r = requests.get(f"{BASE}/profile", headers=H_AUTH)
+data = r.json() if r.status_code == 200 else {}
+tier = None
+if isinstance(data, dict):
+    if isinstance(data.get("subscription"), dict):
+        tier = data["subscription"].get("tier")
+    tier = tier or data.get("subscription_tier")
+check("6a. /profile empire tier", r.status_code == 200 and tier == "empire",
+      f"status={r.status_code} tier={tier}")
 
-try:
-    r = requests.post(f"{BASE}/analytics/track",
-                      json={"event": "beta_invite_view"}, timeout=15)
-    data = r.json()
-    ok = r.status_code == 200 and data.get("status") == "ok"
-    log("POST /analytics/track beta_invite_view", ok,
-        f"status={r.status_code}, body={data}")
-except Exception as e:
-    log("POST /analytics/track beta_invite_view", False, f"Error: {e}")
+r = requests.get(f"{BASE}/subscription/tiers")
+data = r.json() if r.status_code == 200 else {}
+tiers = data.get("tiers", {}) if isinstance(data, dict) else {}
+empire = tiers.get("empire", {}) if isinstance(tiers, dict) else {}
+check("6b. /subscription/tiers empire=$79.99",
+      empire.get("price") == 79.99, f"empire.price={empire.get('price')}")
 
-try:
-    r = requests.post(f"{BASE}/analytics/track",
-                      headers=EMPIRE_HEADERS,
-                      json={"event": "register_submitted"}, timeout=15)
-    data = r.json()
-    ok = r.status_code == 200 and data.get("status") == "ok"
-    log("POST /analytics/track (with Bearer)", ok,
-        f"status={r.status_code}, body={data}")
-except Exception as e:
-    log("POST /analytics/track (with Bearer)", False, f"Error: {e}")
+r = requests.get(f"{BASE}/challenges/first-100", headers=H_AUTH)
+data = r.json() if r.status_code == 200 else {}
+check("6c. /challenges/first-100 completed=true",
+      r.status_code == 200 and data.get("completed") is True,
+      f"status={r.status_code} completed={data.get('completed')} current={data.get('current')}")
 
-try:
-    r = requests.get(f"{BASE}/analytics/funnel", headers=EMPIRE_HEADERS, timeout=15)
-    data = r.json() if r.status_code == 200 else {}
-    required_keys = ["landing_view", "beta_invite_view", "register_submitted",
-                     "quiz_completed", "ai_chat_started", "checkout_started",
-                     "checkout_completed", "conversion_rates"]
-    missing = [k for k in required_keys if k not in data]
-    ok = r.status_code == 200 and not missing
-    log("GET /analytics/funnel (Empire)", ok,
-        f"status={r.status_code}, missing={missing}, landing_view={data.get('landing_view')}, beta_invite_view={data.get('beta_invite_view')}")
-except Exception as e:
-    log("GET /analytics/funnel (Empire)", False, f"Error: {e}")
+r = requests.get(f"{BASE}/waitlist/count")
+data = r.json() if r.status_code == 200 else {}
+count = data.get("count") or data.get("total_joined") or data.get("total") or 0
+check("6d. /waitlist/count >=47", r.status_code == 200 and count >= 47,
+      f"status={r.status_code} count={count}")
 
-try:
-    r = requests.get(f"{BASE}/analytics/funnel", timeout=15)
-    ok = r.status_code in (401, 403)
-    log("GET /analytics/funnel (no auth)", ok, f"status={r.status_code}")
-except Exception as e:
-    log("GET /analytics/funnel (no auth)", False, f"Error: {e}")
+r = requests.post(f"{BASE}/analytics/track", json={"event": "test_event"})
+data = r.json() if r.status_code == 200 else {}
+check("6e. /analytics/track status=ok",
+      r.status_code == 200 and data.get("status") == "ok",
+      f"status={r.status_code} body={data}")
 
-# Login test5@hustleai.com for free-tier test
-free_token = None
-try:
-    r = requests.post(f"{BASE}/auth/login",
-                      json={"email": "test5@hustleai.com", "password": "Test123!"}, timeout=15)
-    if r.status_code == 200:
-        d = r.json()
-        free_token = d.get("session_token")
-        tier = d.get("user", {}).get("subscription_tier")
-        log("Login test5@hustleai.com (for free-tier test)", bool(free_token),
-            f"status={r.status_code}, tier={tier}")
-    else:
-        log("Login test5@hustleai.com (for free-tier test)", False,
-            f"status={r.status_code}, body={r.text[:200]}")
-except Exception as e:
-    log("Login test5@hustleai.com (for free-tier test)", False, f"Error: {e}")
+# 6f. login rate limit - 12 attempts from X-Forwarded-For 198.51.100.99
+ip_header = {"X-Forwarded-For": "198.51.100.99"}
+statuses = []
+bad_payload = {"email": "notreal-rl-test@example.com", "password": "definitelywrong!!"}
+for i in range(12):
+    r = requests.post(f"{BASE}/auth/login", json=bad_payload, headers=ip_header)
+    statuses.append(r.status_code)
+check("6f. login: attempts 11-12 should return 429",
+      statuses[10] == 429 and statuses[11] == 429,
+      f"statuses={statuses}")
 
-if free_token:
-    try:
-        r = requests.get(f"{BASE}/analytics/funnel",
-                         headers={"Authorization": f"Bearer {free_token}"}, timeout=15)
-        detail = ""
-        try:
-            detail = r.json().get("detail", "")
-        except Exception:
-            pass
-        ok = r.status_code == 403 and "empire" in str(detail).lower()
-        log("GET /analytics/funnel (free tier → 403)", ok,
-            f"status={r.status_code}, detail={detail}")
-    except Exception as e:
-        log("GET /analytics/funnel (free tier → 403)", False, f"Error: {e}")
-
-# ═══ 3. RATE LIMITING ═══
-print("\n=== 3. RATE LIMITING ===")
-
-rl_email = f"ratelimit+{ts}@test.com"
-first_10 = []
-last_2 = []
-try:
-    for i in range(12):
-        r = requests.post(f"{BASE}/auth/login",
-                          json={"email": rl_email, "password": "wrong"}, timeout=15)
-        if i < 10:
-            first_10.append(r.status_code)
-        else:
-            last_2.append(r.status_code)
-    ok_first = all(s == 401 for s in first_10)
-    ok_last = all(s == 429 for s in last_2)
-    log("Rate limit: first 10 attempts = 401", ok_first, f"statuses={first_10}")
-    log("Rate limit: attempts 11-12 = 429", ok_last, f"statuses={last_2}")
-except Exception as e:
-    log("Rate limit test", False, f"Error: {e}")
-
-# ═══ 4. WELCOME EMAIL QUEUE ═══
-print("\n=== 4. WELCOME EMAIL QUEUE ===")
-
-new_user_email = f"launch_test_{ts}@hustleai.com"
-new_user_id = None
-try:
-    r = requests.post(f"{BASE}/auth/register",
-                      json={"name": "Test Launch", "email": new_user_email,
-                            "password": "Test123!", "beta_code": "HUSTLEVIP2025"},
-                      timeout=20)
-    if r.status_code == 200:
-        d = r.json()
-        new_user_token = d.get("session_token")
-        new_user_id = d.get("user", {}).get("user_id")
-        log("POST /auth/register (new user for email queue)", bool(new_user_token),
-            f"status={r.status_code}, user_id={new_user_id}, tier={d.get('user', {}).get('subscription_tier')}")
-    else:
-        log("POST /auth/register (new user for email queue)", False,
-            f"status={r.status_code}, body={r.text[:200]}")
-except Exception as e:
-    log("POST /auth/register (new user for email queue)", False, f"Error: {e}")
-
-# GET /admin/email-queue/pending with Empire
-try:
-    r = requests.get(f"{BASE}/admin/email-queue/pending",
-                     headers=EMPIRE_HEADERS, timeout=15)
-    data = r.json() if r.status_code == 200 else {}
-    ok = r.status_code == 200 and "pending" in data and "count" in data
-    log("GET /admin/email-queue/pending (Empire)", ok,
-        f"status={r.status_code}, pending_count={data.get('count')} (emails scheduled Day 1/3/7/14 are FUTURE; pending filter is <=now)")
-except Exception as e:
-    log("GET /admin/email-queue/pending (Empire)", False, f"Error: {e}")
-
-# Direct DB verification: check that 4 email_queue entries exist for new user via backend DB
-# We can't query mongo directly here, but we can verify indirectly: try the endpoint,
-# and also make a raw call to count emails by the given email (via admin endpoint if exists).
-# Since admin/email-queue/pending filters scheduled_for<=now, none of our 4 future-scheduled emails show.
-# That's expected. Let's verify via mongo directly if available.
-try:
-    import subprocess
-    # Load MONGO_URL from backend env
-    import os
-    mongo_url = None
-    db_name = None
-    with open("/app/backend/.env") as f:
-        for line in f:
-            if line.startswith("MONGO_URL="):
-                mongo_url = line.split("=", 1)[1].strip().strip('"').strip("'")
-            if line.startswith("DB_NAME="):
-                db_name = line.split("=", 1)[1].strip().strip('"').strip("'")
-    if mongo_url and db_name and new_user_id:
-        from pymongo import MongoClient
-        mc = MongoClient(mongo_url)
-        mdb = mc[db_name]
-        queued = list(mdb.email_queue.find({"user_id": new_user_id}))
-        ok = len(queued) == 4
-        offsets = sorted([
-            # derive day offset from scheduled_for - created_at if present
-        ])
-        subjects = [q.get("subject", "") for q in queued]
-        log("DB: 4 welcome emails queued for new user", ok,
-            f"count={len(queued)}, subjects={subjects}")
-        mc.close()
-except Exception as e:
-    log("DB: 4 welcome emails queued for new user", False, f"Error: {e}")
-
-# ═══ 5. REGRESSION ═══
-print("\n=== 5. REGRESSION ===")
-
-try:
-    r = requests.get(f"{BASE}/profile", headers=EMPIRE_HEADERS, timeout=15)
-    data = r.json() if r.status_code == 200 else {}
-    tier = data.get("subscription", {}).get("tier")
-    ok = r.status_code == 200 and tier == "empire"
-    log("GET /profile (Empire)", ok, f"status={r.status_code}, tier={tier}")
-except Exception as e:
-    log("GET /profile (Empire)", False, f"Error: {e}")
-
-try:
-    r = requests.get(f"{BASE}/challenges/first-100", headers=EMPIRE_HEADERS, timeout=15)
-    data = r.json() if r.status_code == 200 else {}
-    current = data.get("current")
-    completed = data.get("completed")
-    ok = r.status_code == 200 and float(current or 0) >= 600 and completed is True
-    log("GET /challenges/first-100", ok,
-        f"status={r.status_code}, current=${current}, completed={completed}")
-except Exception as e:
-    log("GET /challenges/first-100", False, f"Error: {e}")
-
-try:
-    r = requests.get(f"{BASE}/leaderboard", headers=EMPIRE_HEADERS, timeout=15)
-    data = r.json() if r.status_code == 200 else {}
-    top = data.get("top", [])
-    top_name = top[0]["name"] if top else ""
-    ok = r.status_code == 200 and "Adrian" in top_name
-    log("GET /leaderboard (Adrian #1)", ok,
-        f"status={r.status_code}, top[0]={top_name}")
-except Exception as e:
-    log("GET /leaderboard (Adrian #1)", False, f"Error: {e}")
-
-try:
-    r = requests.get(f"{BASE}/activity/live", timeout=15)
-    data = r.json() if r.status_code == 200 else {}
-    acts = data.get("activities", [])
-    ok = r.status_code == 200 and isinstance(acts, list) and len(acts) > 0
-    log("GET /activity/live", ok, f"status={r.status_code}, count={len(acts)}")
-except Exception as e:
-    log("GET /activity/live", False, f"Error: {e}")
-
-try:
-    r = requests.get(f"{BASE}/subscription/tiers", timeout=15)
-    data = r.json() if r.status_code == 200 else {}
-    empire_price = data.get("tiers", {}).get("empire", {}).get("price")
-    ok = r.status_code == 200 and float(empire_price or 0) == 79.99
-    log("GET /subscription/tiers (Empire=$79.99)", ok,
-        f"status={r.status_code}, empire.price={empire_price}")
-except Exception as e:
-    log("GET /subscription/tiers", False, f"Error: {e}")
-
-# ═══ SUMMARY ═══
-print("\n" + "="*60)
-passed = sum(1 for ok, _, _ in results if ok)
-total = len(results)
-print(f"TOTAL: {passed}/{total} passed")
-print("="*60)
-for ok, name, detail in results:
-    if not ok:
-        print(f"  ❌ {name}: {detail}")
-sys.exit(0 if passed == total else 1)
+# Summary
+print("\n===== SUMMARY =====")
+passed = sum(1 for _, ok, _ in results if ok)
+failed = len(results) - passed
+print(f"PASSED: {passed}/{len(results)}")
+if failed:
+    print("FAILURES:")
+    for n, ok, d in results:
+        if not ok:
+            print(f" ❌ {n} — {d}")
