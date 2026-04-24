@@ -161,9 +161,3 @@ const styles = StyleSheet.create({
   footerText: { fontSize: 14, color: Colors.textSecondary },
   footerLink: { fontSize: 14, fontWeight: '700', color: Colors.trustBlue },
 });
-erRadius: 12, borderWidth: 1.5, borderColor: Colors.border },
-  googleBtnText: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
-  footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, marginTop: 32 },
-  footerText: { fontSize: 14, color: Colors.textSecondary },
-  footerLink: { fontSize: 14, fontWeight: '700', color: Colors.trustBlue },
-});

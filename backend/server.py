@@ -85,6 +85,11 @@ ALACARTE_AGENT_PRICES = {
 ALACARTE_AGENT_PACK_PRICE = 19.99  # All 3 premium agents — 33% discount
 REFERRAL_CREDIT = 5.00
 
+# ─── FOUNDERS LAUNCH OFFERS ───
+FOUNDERS_LIFETIME_PRICE = 149.00
+FOUNDERS_LIFETIME_SEAT_LIMIT = 100
+INSTANT_KIT_PRICE = 29.00
+
 # First-month promo codes (50% off)
 FIRST_MONTH_PROMO_CODES = {
     "HUSTLE50": {"discount_pct": 50, "description": "50% off first month"},
@@ -914,7 +919,7 @@ async def get_referral_info(user: dict = Depends(get_current_user)):
 # ─── PAYMENT ENDPOINTS ───
 @api_router.post("/payments/create-checkout")
 async def create_checkout(req: CheckoutRequest, user: dict = Depends(get_current_user)):
-    valid = ["starter", "pro", "empire", "alacarte"]
+    valid = ["starter", "pro", "empire", "alacarte", "lifetime", "instant_kit"]
     if req.plan not in valid:
         raise HTTPException(status_code=400, detail="Invalid plan")
     origin_url = req.origin_url.rstrip('/')
@@ -925,7 +930,22 @@ async def create_checkout(req: CheckoutRequest, user: dict = Depends(get_current
     promo_applied = None
     promo_discount_pct = 0
 
-    if req.plan == "alacarte":
+    if req.plan == "lifetime":
+        # Check seat availability
+        sold = await db.payment_transactions.count_documents(
+            {"plan_name": "lifetime", "payment_status": "paid"})
+        if sold >= FOUNDERS_LIFETIME_SEAT_LIMIT:
+            raise HTTPException(status_code=400, detail="Founders Lifetime is sold out. Thank you for being part of this journey.")
+        amount = float(FOUNDERS_LIFETIME_PRICE)
+        success_url = f"{origin_url}/payment-success?session_id={{CHECKOUT_SESSION_ID}}&type=lifetime"
+        metadata = {"user_id": user["user_id"], "plan": "lifetime", "plan_name": "lifetime"}
+    elif req.plan == "instant_kit":
+        if not req.hustle_id:
+            raise HTTPException(status_code=400, detail="hustle_id required for Instant Kit")
+        amount = float(INSTANT_KIT_PRICE)
+        success_url = f"{origin_url}/payment-success?session_id={{CHECKOUT_SESSION_ID}}&type=instant_kit&hustle_id={req.hustle_id}"
+        metadata = {"user_id": user["user_id"], "plan": "instant_kit", "plan_name": "instant_kit", "hustle_id": req.hustle_id}
+    elif req.plan == "alacarte":
         if not req.hustle_id:
             raise HTTPException(status_code=400, detail="hustle_id required")
         amount = float(ALACARTE_PLAN_PRICE)
