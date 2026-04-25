@@ -1072,6 +1072,16 @@ async def _grant_plan_access(user_id: str, plan_name: str, txn: Optional[Dict[st
             {"user_id": user_id}, {"$set": {"subscription_tier": plan_name}}
         )
 
+    # Fire receipt email (non-blocking — don't fail the webhook if email fails)
+    try:
+        amount = float((txn or {}).get("amount", 0)) if txn else 0.0
+        billing = (txn or {}).get("billing", "monthly")
+        hustle_id = (txn or {}).get("hustle_id")
+        if plan_name in ("lifetime", "instant_kit", "starter", "pro", "empire"):
+            asyncio.create_task(send_payment_receipt(user_id, plan_name, amount, billing, hustle_id))
+    except Exception as e:
+        logger.warning(f"[receipt] failed to schedule receipt email: {e}")
+
 
 @api_router.get("/payments/status/{session_id}")
 async def get_payment_status(session_id: str, user: dict = Depends(get_current_user)):
@@ -2282,28 +2292,137 @@ async def email_queue_pending(user: dict = Depends(get_current_user)):
     ).sort("scheduled_for", 1).to_list(50)
     return {"pending": pending, "count": len(pending)}
 
+
+# Admin: send a test email to the current user (verifies Resend is wired)
+@api_router.post("/admin/email/test-send")
+async def admin_email_test_send(user: dict = Depends(get_current_user)):
+    if user.get("subscription_tier") != "empire":
+        raise HTTPException(status_code=403, detail="Empire tier only")
+    from emailer import send_email, EMAIL_ENABLED, render_day1
+    if not EMAIL_ENABLED:
+        raise HTTPException(status_code=503, detail="RESEND_API_KEY not configured")
+    first = (user.get("name", "Hustler") or "Hustler").split(" ")[0]
+    tpl = render_day1(first)
+    result = await send_email(
+        to_email=user.get("email", ""),
+        to_name=user.get("name", ""),
+        subject="[TEST] " + tpl["subject"],
+        html=tpl["html"],
+    )
+    return {"status": "ok" if result.get("ok") else "error",
+            "provider_id": result.get("id"),
+            "error": result.get("error"),
+            "to": user.get("email")}
+
+
+# Admin: force-run the dispatcher one cycle (no waiting for the 60s loop)
+@api_router.post("/admin/email/dispatch-now")
+async def admin_email_dispatch_now(user: dict = Depends(get_current_user)):
+    if user.get("subscription_tier") != "empire":
+        raise HTTPException(status_code=403, detail="Empire tier only")
+    sent = await _dispatch_pending_emails()
+    return {"status": "ok", "sent": sent}
+
 async def schedule_welcome_emails(user_id: str, email: str, name: str):
-    """Queue Day 1/3/7/14 emails. Background worker sends via SendGrid/Resend later."""
+    """Queue Day 1/3/7/14 emails. Day 1 fires immediately; rest are queued for the worker."""
+    from emailer import render_day1, render_day3, render_day7, render_day14
     now = datetime.now(timezone.utc)
-    templates = [
-        (1, "Your Day 1 action plan is ready",
-         f"Hey {name.split(' ')[0]}, welcome to HustleAI! Your first day is simple: finish the questionnaire (2 min) and lock in your top hustle match."),
-        (3, "Day 3 check-in: the first milestone is $100",
-         f"{name.split(' ')[0]}, most hustlers earn their first dollar by Day 7. Log what you've earned (even $5) to break the seal. Your future self will thank you."),
-        (7, "Week 1 reflection — what's working?",
-         f"You're 7 days in, {name.split(' ')[0]}. Open your dashboard to see your streak, earnings, and top tasks for Week 2."),
-        (14, "Halfway through your 30-day plan",
-         f"{name.split(' ')[0]}, this is where most people quit. That's why most people don't make it. You're different — open the app, log a win, and keep going."),
+    first = (name or "Hustler").split(" ")[0] or "Hustler"
+    series = [
+        (0, render_day1(first)),    # Day 1 — immediate
+        (3, render_day3(first)),
+        (7, render_day7(first)),
+        (14, render_day14(first)),
     ]
-    for offset_days, subject, body in templates:
+    for offset_days, tpl in series:
         scheduled = (now + timedelta(days=offset_days)).isoformat()
         await db.email_queue.insert_one({
             "email_id": f"email_{uuid.uuid4().hex[:10]}",
             "user_id": user_id, "to_email": email, "to_name": name,
-            "subject": subject, "body": body,
+            "subject": tpl["subject"], "body": tpl["html"],
+            "type": f"welcome_day_{offset_days}",
             "scheduled_for": scheduled, "status": "pending",
             "created_at": now.isoformat(),
         })
+
+
+# ─── 📧 Background email dispatcher ───
+async def _dispatch_pending_emails():
+    """Reads email_queue for due rows and sends via Resend. Marks status."""
+    from emailer import send_email, EMAIL_ENABLED
+    if not EMAIL_ENABLED:
+        return 0
+    now = datetime.now(timezone.utc).isoformat()
+    cursor = db.email_queue.find(
+        {"status": "pending", "scheduled_for": {"$lte": now}}
+    ).limit(50)
+    sent = 0
+    async for row in cursor:
+        # Atomic claim — set to 'sending' so dupe workers don't double-send
+        claim = await db.email_queue.update_one(
+            {"email_id": row["email_id"], "status": "pending"},
+            {"$set": {"status": "sending", "sending_at": now}}
+        )
+        if claim.modified_count == 0:
+            continue
+        result = await send_email(
+            to_email=row.get("to_email", ""),
+            subject=row.get("subject", ""),
+            html=row.get("body", ""),
+            to_name=row.get("to_name", ""),
+        )
+        await db.email_queue.update_one(
+            {"email_id": row["email_id"]},
+            {"$set": {
+                "status": "sent" if result.get("ok") else "failed",
+                "provider_id": result.get("id"),
+                "error": result.get("error"),
+                "sent_at": datetime.now(timezone.utc).isoformat(),
+            }}
+        )
+        if result.get("ok"):
+            sent += 1
+    return sent
+
+
+async def _email_worker_loop():
+    """Run forever, dispatching pending emails every 60s."""
+    while True:
+        try:
+            count = await _dispatch_pending_emails()
+            if count:
+                logger.info(f"[email worker] sent {count} email(s)")
+        except Exception as e:
+            logger.error(f"[email worker] loop error: {e}")
+        await asyncio.sleep(60)
+
+
+async def send_payment_receipt(user_id: str, plan_name: str, amount: float,
+                                billing: str = "monthly", hustle_id: Optional[str] = None):
+    """Fire a receipt email for the appropriate purchase type."""
+    from emailer import (render_lifetime_receipt, render_instant_kit_receipt,
+                          render_subscription_receipt, send_email)
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not user:
+        return
+    email = user.get("email", "")
+    name = (user.get("name", "Hustler") or "Hustler")
+    first = name.split(" ")[0] or "Hustler"
+    if plan_name == "lifetime":
+        tpl = render_lifetime_receipt(first, amount)
+    elif plan_name == "instant_kit":
+        hustle_name = ""
+        if hustle_id:
+            hustle = await db.side_hustles.find_one({"hustle_id": hustle_id}, {"_id": 0, "name": 1})
+            if hustle:
+                hustle_name = hustle.get("name", "")
+        tpl = render_instant_kit_receipt(first, amount, hustle_name)
+    elif plan_name in ("starter", "pro", "empire"):
+        tpl = render_subscription_receipt(first, plan_name.capitalize(), amount, billing)
+    else:
+        return
+    await send_email(to_email=email, to_name=name,
+                     subject=tpl["subject"], html=tpl["html"])
 
 
 # ─── 🔔 PUSH NOTIFICATIONS ───
@@ -2407,6 +2526,15 @@ async def trigger_daily_reminders(request: Request):
 
 app.include_router(api_router)
 app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+@app.on_event("startup")
+async def _start_email_worker():
+    """Kick off the background email dispatcher loop."""
+    try:
+        asyncio.create_task(_email_worker_loop())
+        logger.info("[email worker] started")
+    except Exception as e:
+        logger.error(f"[email worker] failed to start: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
