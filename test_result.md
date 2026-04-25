@@ -482,6 +482,45 @@ test_plan:
   test_all: false
   test_priority: "high_first"
 
+frontend:
+  - task: "3-Offer Launch Stack — Pricing page UI (Founders Lifetime + Instant Kit hero)"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/pricing.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "✅ FULL PASS — mobile 390x844 logged-out test against http://localhost:3000/pricing. Verified all 21 hero/card/divider checks: red 'FOUNDERS LAUNCH · LIMITED' badge ✅, headline 'Skip the subscription. Pay once.' ✅, subhead 'no-brainer offers' / 'first paying customer this week' ✅. LIFETIME CARD: title 'Founders Lifetime Access' + kicker 'Empire tier · forever · no monthly bill' ✅, $149 price + $960/yr value crossed-out + 'one-time' pill ✅, seat counter rendered with text 'Founders seats left' / 'of 100' (gold bar) ✅, 'Founder badge on the leaderboard' bullet ✅, gold CTA button testID='lifetime-buy-btn' inner text 'Claim Lifetime Access — $149' ✅. INSTANT KIT CARD: title 'Instant Hustle Kit' + kicker 'ready in minutes' ✅, $29 price + 'one-time' pill ✅, 'Yours to keep' bullet ✅, blue CTA testID='instant-kit-buy-btn' inner text 'Pick a Hustle & Get the Kit — $29' ✅. 'OR SUBSCRIBE' divider ✅, Monthly/Annual toggle ✅, FREE/STARTER/PRO/EMPIRE tier cards still render below ✅. ROUTING (logged out): clicking 'Pick a Hustle & Get the Kit — $29' → /register ✅; clicking 'Claim Lifetime Access — $149' → /register ✅. No console errors, no JSX regressions."
+  - task: "Login page Google Sign-In button"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/login.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "✅ FULL PASS — mobile 390x844. testID='google-signin-btn' renders below testID='login-submit-btn' (g.y=463 > s.y=349) with 'OR' divider in between ✅. Red Google logo (Ionicons logo-google color #EA4335) and 'Continue with Google' text present ✅. Email + password inputs (testID='login-email-input', 'login-password-input') accept input correctly ✅. Sign In button still present and functional. No JSX regression. handleGoogleSignIn redirects to https://auth.emergentagent.com/?redirect=... (Emergent OAuth) — not exercised end-to-end but onPress wiring verified."
+  - task: "Regression — landing page + dashboard redirect for logged-out user"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/index.tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "✅ http://localhost:3000 still loads with HustleAI branding/waitlist content ✅. Logged-out navigation to /dashboard correctly resolves to landing page (URL: http://localhost:3000/) with no red-screen errors ✅."
+
+agent_communication:
+    - agent: "testing"
+    - message: "✅ 3-OFFER LAUNCH STACK FRONTEND + GOOGLE LOGIN — FULL PASS (mobile 390x844, logged out). PRICING PAGE: Founders Launch hero renders ABOVE existing tier cards with red 'FOUNDERS LAUNCH · LIMITED' badge + 'Skip the subscription. Pay once.' headline + correct subhead. $149 Founders Lifetime Access card has all required elements (Empire kicker, $149 + $960/yr crossed + ONE-TIME pill, gold seat counter '100 of 100 Founders seats left', 6 bullets ending in 'Founder badge on the leaderboard', gold CTA testID='lifetime-buy-btn' = 'Claim Lifetime Access — $149'). $29 Instant Hustle Kit card has correct kicker, $29 price, ONE-TIME pill, 5 bullets ending in 'Yours to keep — no subscription', blue CTA testID='instant-kit-buy-btn' = 'Pick a Hustle & Get the Kit — $29'. 'OR SUBSCRIBE' divider then Monthly/Annual toggle + 4 tier cards still render. ROUTING: both CTAs route logged-out users to /register correctly. LOGIN PAGE: testID='google-signin-btn' renders below Sign In with 'OR' divider, red Google icon (#EA4335), 'Continue with Google' text. Email/password fields accept input — no JSX regression. REGRESSION: landing page loads with HustleAI branding; /dashboard while logged out redirects to landing/index without red-screen errors. NO CRITICAL OR MAJOR ISSUES. Main agent can summarize and finish."
+
 backend:
   - task: "3-Offer Launch Stack — Founders Lifetime + Instant Kit (backend)"
     implemented: true
