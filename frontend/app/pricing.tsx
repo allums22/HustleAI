@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Platform, Linking, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -57,6 +57,12 @@ export default function PricingScreen() {
   const [promoCode, setPromoCode] = useState('');
   const [promoStatus, setPromoStatus] = useState<{ valid: boolean; msg: string; pct?: number } | null>(null);
   const [validating, setValidating] = useState(false);
+  const [seats, setSeats] = useState<{ sold: number; limit: number; remaining: number; price: number; instant_kit_price: number; available: boolean } | null>(null);
+  const [launchLoading, setLaunchLoading] = useState<'lifetime' | 'instant_kit' | null>(null);
+
+  useEffect(() => {
+    api.getFoundersSeats().then(setSeats).catch(() => {});
+  }, []);
 
   const currentTier = user?.subscription_tier || 'free';
   const tierOrder = ['free', 'starter', 'pro', 'empire'];
@@ -75,6 +81,26 @@ export default function PricingScreen() {
     } catch (e: any) {
       setPromoStatus({ valid: false, msg: 'Could not validate code' });
     } finally { setValidating(false); }
+  };
+
+  const handleLifetimeBuy = async () => {
+    if (!user) { router.push('/register'); return; }
+    setLaunchLoading('lifetime');
+    try {
+      const originUrl = Platform.OS === 'web' ? window.location.origin : '';
+      const res = await api.createCheckout({ plan: 'lifetime', origin_url: originUrl });
+      if (res.url) {
+        Platform.OS === 'web' ? (window.location.href = res.url) : Linking.openURL(res.url);
+      }
+    } catch (e: any) {
+      alert(e.message || 'Checkout failed');
+    } finally { setLaunchLoading(null); }
+  };
+
+  const handleInstantKit = () => {
+    if (!user) { router.push('/register'); return; }
+    // Instant Kit needs a hustle context — send user to dashboard
+    router.push('/(tabs)/dashboard');
   };
 
   const handleUpgrade = async (planKey: string) => {
@@ -125,6 +151,123 @@ export default function PricingScreen() {
             <Text style={styles.guaranteeTitle}>30-Day Money-Back Guarantee</Text>
             <Text style={styles.guaranteeSub}>Don't earn your first dollar in 30 days? Full refund. No questions asked.</Text>
           </View>
+        </View>
+
+        {/* 🔥 LAUNCH STACK — Founders Lifetime + Instant Kit */}
+        <View style={styles.launchStackHeader}>
+          <View style={styles.launchStackBadge}>
+            <Ionicons name="flame" size={12} color="#fff" />
+            <Text style={styles.launchStackBadgeText}>FOUNDERS LAUNCH · LIMITED</Text>
+          </View>
+          <Text style={styles.launchStackTitle}>Skip the subscription. Pay once.</Text>
+          <Text style={styles.launchStackSub}>
+            Two no-brainer offers built to get you to your first paying customer this week.
+          </Text>
+        </View>
+
+        {/* Lifetime Card */}
+        <View style={[styles.launchCard, styles.launchCardLifetime]}>
+          <View style={styles.launchCardTopRow}>
+            <View style={styles.launchIconWrap}>
+              <Ionicons name="infinite" size={22} color={Colors.gold} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.launchCardTitle}>Founders Lifetime Access</Text>
+              <Text style={styles.launchCardKicker}>Empire tier · forever · no monthly bill</Text>
+            </View>
+          </View>
+          <View style={styles.launchPriceRow}>
+            <Text style={styles.launchPrice}>$149</Text>
+            <Text style={styles.launchPriceCrossed}>$960/yr value</Text>
+            <Text style={styles.launchOnce}>one-time</Text>
+          </View>
+          {seats && (
+            <View style={styles.seatsRow}>
+              <View style={styles.seatsBar}>
+                <View style={[styles.seatsBarFill, { width: `${Math.min(100, (seats.sold / seats.limit) * 100)}%` }]} />
+              </View>
+              <Text style={styles.seatsText}>
+                {seats.remaining > 0
+                  ? `Only ${seats.remaining} of ${seats.limit} Founders seats left`
+                  : 'Sold out'}
+              </Text>
+            </View>
+          )}
+          <View style={styles.launchFeatures}>
+            {[
+              'Unlimited business plans · forever',
+              'Unlimited launch kits + landing pages',
+              'All 4 AI Agents (Mentor, Marketing, Content, Finance)',
+              'White-label landing pages',
+              'Every future feature, free, forever',
+              'Founder badge on the leaderboard',
+            ].map((f, i) => (
+              <View key={i} style={styles.launchFeatureRow}>
+                <Ionicons name="checkmark-circle" size={15} color={Colors.gold} />
+                <Text style={styles.launchFeatureText}>{f}</Text>
+              </View>
+            ))}
+          </View>
+          <TouchableOpacity
+            testID="lifetime-buy-btn"
+            style={[styles.launchBtn, styles.launchBtnLifetime, (seats && !seats.available) && styles.btnDisabled]}
+            onPress={handleLifetimeBuy}
+            disabled={launchLoading === 'lifetime' || !!(seats && !seats.available)}
+            activeOpacity={0.85}
+          >
+            {launchLoading === 'lifetime' ? (
+              <ActivityIndicator color="#000" />
+            ) : (
+              <Text style={styles.launchBtnTextLifetime}>
+                {seats && !seats.available ? 'Sold Out' : 'Claim Lifetime Access — $149'}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Instant Kit Card */}
+        <View style={[styles.launchCard, styles.launchCardKit]}>
+          <View style={styles.launchCardTopRow}>
+            <View style={[styles.launchIconWrap, { backgroundColor: Colors.trustBlueLight }]}>
+              <Ionicons name="rocket" size={22} color={Colors.trustBlue} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.launchCardTitle}>Instant Hustle Kit</Text>
+              <Text style={styles.launchCardKicker}>One complete launch package · ready in minutes</Text>
+            </View>
+          </View>
+          <View style={styles.launchPriceRow}>
+            <Text style={styles.launchPrice}>$29</Text>
+            <Text style={styles.launchOnce}>one-time</Text>
+          </View>
+          <View style={styles.launchFeatures}>
+            {[
+              'AI-generated business plan tailored to one hustle',
+              '30-day execution calendar',
+              'Branded landing page with your contact info',
+              'Marketing strategy + first 5 customers playbook',
+              'Yours to keep — no subscription',
+            ].map((f, i) => (
+              <View key={i} style={styles.launchFeatureRow}>
+                <Ionicons name="checkmark-circle" size={15} color={Colors.trustBlue} />
+                <Text style={styles.launchFeatureText}>{f}</Text>
+              </View>
+            ))}
+          </View>
+          <TouchableOpacity
+            testID="instant-kit-buy-btn"
+            style={[styles.launchBtn, styles.launchBtnKit]}
+            onPress={handleInstantKit}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.launchBtnTextKit}>Pick a Hustle & Get the Kit — $29</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.launchDivider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.launchDividerText}>OR SUBSCRIBE</Text>
+          <View style={styles.dividerLine} />
         </View>
 
         {/* Billing Toggle */}
@@ -389,4 +532,35 @@ const styles = StyleSheet.create({
   valueNudgeText: { fontSize: 12, color: Colors.gold, flex: 1, lineHeight: 17 },
   footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8 },
   guaranteeText: { fontSize: 12, color: Colors.textSecondary },
+  // 🔥 Launch Stack
+  launchStackHeader: { alignItems: 'center', marginTop: 6, marginBottom: 14 },
+  launchStackBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#dc2626', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, marginBottom: 10 },
+  launchStackBadgeText: { fontSize: 10, fontWeight: '900', color: '#fff', letterSpacing: 1 },
+  launchStackTitle: { fontSize: 22, fontWeight: '900', color: Colors.textPrimary, letterSpacing: -0.5, textAlign: 'center' },
+  launchStackSub: { fontSize: 13, color: Colors.textSecondary, textAlign: 'center', marginTop: 6, lineHeight: 19, paddingHorizontal: 12 },
+  launchCard: { backgroundColor: Colors.surface, borderRadius: 16, padding: 18, marginBottom: 12, borderWidth: 1.5 },
+  launchCardLifetime: { borderColor: Colors.gold, backgroundColor: Colors.surfaceElevated },
+  launchCardKit: { borderColor: Colors.trustBlue + '70' },
+  launchCardTopRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  launchIconWrap: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.orangeLight, justifyContent: 'center', alignItems: 'center' },
+  launchCardTitle: { fontSize: 17, fontWeight: '800', color: Colors.textPrimary },
+  launchCardKicker: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
+  launchPriceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 10, marginBottom: 10, flexWrap: 'wrap' },
+  launchPrice: { fontSize: 36, fontWeight: '900', color: Colors.textPrimary, letterSpacing: -1 },
+  launchPriceCrossed: { fontSize: 14, color: Colors.textTertiary, textDecorationLine: 'line-through', fontWeight: '600' },
+  launchOnce: { fontSize: 13, color: Colors.textSecondary, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  seatsRow: { marginBottom: 14, gap: 6 },
+  seatsBar: { height: 6, backgroundColor: Colors.border, borderRadius: 999, overflow: 'hidden' },
+  seatsBarFill: { height: 6, backgroundColor: Colors.gold, borderRadius: 999 },
+  seatsText: { fontSize: 11, fontWeight: '700', color: Colors.gold, letterSpacing: 0.3, textTransform: 'uppercase' },
+  launchFeatures: { gap: 7, marginBottom: 14 },
+  launchFeatureRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  launchFeatureText: { fontSize: 13, color: Colors.textPrimary, flex: 1, lineHeight: 18 },
+  launchBtn: { paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
+  launchBtnLifetime: { backgroundColor: Colors.gold },
+  launchBtnTextLifetime: { fontSize: 15, fontWeight: '900', color: '#000', letterSpacing: 0.3 },
+  launchBtnKit: { backgroundColor: Colors.trustBlue },
+  launchBtnTextKit: { fontSize: 15, fontWeight: '800', color: Colors.textOnColor, letterSpacing: 0.3 },
+  launchDivider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8, marginBottom: 14 },
+  launchDividerText: { fontSize: 11, fontWeight: '800', color: Colors.textTertiary, letterSpacing: 1.5 },
 });

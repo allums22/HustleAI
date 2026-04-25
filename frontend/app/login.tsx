@@ -121,6 +121,25 @@ export default function LoginScreen() {
                 <Text style={styles.submitBtnText}>Sign In</Text>
               )}
             </TouchableOpacity>
+
+            {Platform.OS === 'web' && (
+              <>
+                <View style={styles.dividerRow}>
+                  <View style={styles.divLine} />
+                  <Text style={styles.divText}>OR</Text>
+                  <View style={styles.divLine} />
+                </View>
+                <TouchableOpacity
+                  testID="google-signin-btn"
+                  style={styles.googleBtn}
+                  onPress={handleGoogleSignIn}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="logo-google" size={18} color="#EA4335" />
+                  <Text style={styles.googleBtnText}>Continue with Google</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
 
           <View style={styles.footer}>

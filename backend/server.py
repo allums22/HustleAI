@@ -823,16 +823,20 @@ async def check_kit_access(hustle_id: str, user: dict = Depends(get_current_user
         return {"has_access": True, "reason": "already_generated", "kit_exists": True}
     tier = user.get("subscription_tier", "free")
     kits_generated = user.get("launch_kits_generated", 0)
+    instant_credits = user.get("instant_kit_credits", 0)
     tier_info = SUBSCRIPTION_TIERS.get(tier, SUBSCRIPTION_TIERS["free"])
-    if tier == "empire":
+    if tier == "empire" or user.get("lifetime_access"):
         return {"has_access": True, "reason": "empire_plan", "kit_exists": False}
     if tier in ("starter", "pro") and kits_generated < tier_info["launch_kit_limit"]:
         return {"has_access": True, "reason": f"{tier}_plan", "kit_exists": False, "remaining": tier_info["launch_kit_limit"] - kits_generated}
+    if instant_credits > 0:
+        return {"has_access": True, "reason": "instant_kit_credit", "kit_exists": False, "remaining": instant_credits}
     alacarte = await db.payment_transactions.find_one(
-        {"user_id": user["user_id"], "hustle_id": hustle_id, "payment_status": "paid", "plan_name": "alacarte_kit"}, {"_id": 0})
+        {"user_id": user["user_id"], "hustle_id": hustle_id, "payment_status": "paid",
+         "plan_name": {"$in": ["alacarte_kit", "instant_kit"]}}, {"_id": 0})
     if alacarte:
         return {"has_access": True, "reason": "alacarte_purchased", "kit_exists": False}
-    return {"has_access": False, "reason": "upgrade_required"}
+    return {"has_access": False, "reason": "upgrade_required", "instant_kit_price": INSTANT_KIT_PRICE}
 
 @api_router.post("/launch-kit/generate/{hustle_id}")
 async def generate_launch_kit(hustle_id: str, user: dict = Depends(get_current_user)):
@@ -870,17 +874,40 @@ async def generate_launch_kit(hustle_id: str, user: dict = Depends(get_current_u
     # Access check
     tier = user.get("subscription_tier", "free")
     kits_gen = user.get("launch_kits_generated", 0)
+    instant_credits = user.get("instant_kit_credits", 0)
     tier_info = SUBSCRIPTION_TIERS.get(tier, SUBSCRIPTION_TIERS["free"])
-    if tier == "free":
-        alacarte = await db.payment_transactions.find_one(
-            {"user_id": user["user_id"], "hustle_id": hustle_id, "payment_status": "paid", "plan_name": "alacarte_kit"}, {"_id": 0})
-        if not alacarte:
-            raise HTTPException(status_code=403, detail="Purchase a Launch Kit ($2.99) or upgrade your plan.")
+    used_instant_credit = False
+
+    def _has_alacarte_or_instant():
+        return db.payment_transactions.find_one(
+            {"user_id": user["user_id"], "hustle_id": hustle_id, "payment_status": "paid",
+             "plan_name": {"$in": ["alacarte_kit", "instant_kit"]}}, {"_id": 0})
+
+    if user.get("lifetime_access") or tier == "empire":
+        pass  # full access
+    elif tier == "free":
+        if instant_credits > 0:
+            used_instant_credit = True
+        else:
+            alacarte = await _has_alacarte_or_instant()
+            if not alacarte:
+                raise HTTPException(status_code=403, detail=f"Purchase the Instant Hustle Kit (${INSTANT_KIT_PRICE:.0f}) or upgrade your plan.")
     elif tier != "empire" and kits_gen >= tier_info["launch_kit_limit"]:
-        alacarte = await db.payment_transactions.find_one(
-            {"user_id": user["user_id"], "hustle_id": hustle_id, "payment_status": "paid", "plan_name": "alacarte_kit"}, {"_id": 0})
-        if not alacarte:
-            raise HTTPException(status_code=403, detail="Launch kit limit reached. Buy à la carte ($2.99) or upgrade.")
+        if instant_credits > 0:
+            used_instant_credit = True
+        else:
+            alacarte = await _has_alacarte_or_instant()
+            if not alacarte:
+                raise HTTPException(status_code=403, detail=f"Launch kit limit reached. Buy the Instant Hustle Kit (${INSTANT_KIT_PRICE:.0f}) or upgrade.")
+
+    # Burn the instant kit credit (atomic) if we plan to use it
+    if used_instant_credit:
+        result = await db.users.update_one(
+            {"user_id": user["user_id"], "instant_kit_credits": {"$gt": 0}},
+            {"$inc": {"instant_kit_credits": -1}}
+        )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=403, detail="No Instant Kit credits available.")
 
     # Check if already generating
     job_id = f"job_kit_{hustle_id}"
@@ -1020,6 +1047,32 @@ async def validate_checkout_promo(req: dict, user: dict = Depends(get_current_us
     return {"valid": True, "discount_pct": promo["discount_pct"],
             "description": promo["description"]}
 
+async def _grant_plan_access(user_id: str, plan_name: str, txn: Optional[Dict[str, Any]] = None):
+    """Apply user-level entitlements after a successful payment."""
+    if not user_id:
+        return
+    if plan_name == "lifetime":
+        # Founders Lifetime: empire tier forever + flag
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$set": {"subscription_tier": "empire", "lifetime_access": True,
+                      "lifetime_purchased_at": datetime.now(timezone.utc).isoformat()}}
+        )
+    elif plan_name == "instant_kit":
+        # Grant 1 instant kit credit redeemable for a launch kit
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$inc": {"instant_kit_credits": 1}}
+        )
+    elif plan_name in ("alacarte", "alacarte_kit"):
+        pass  # already tracked via payment_transactions row
+    else:
+        # Starter/Pro/Empire subscription
+        await db.users.update_one(
+            {"user_id": user_id}, {"$set": {"subscription_tier": plan_name}}
+        )
+
+
 @api_router.get("/payments/status/{session_id}")
 async def get_payment_status(session_id: str, user: dict = Depends(get_current_user)):
     txn = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
@@ -1033,11 +1086,7 @@ async def get_payment_status(session_id: str, user: dict = Depends(get_current_u
         await db.payment_transactions.update_one({"session_id": session_id}, {"$set": {"status": sr.status, "payment_status": sr.payment_status, "updated_at": datetime.now(timezone.utc).isoformat()}})
         if sr.payment_status == "paid":
             pn = txn.get("plan_name", "starter")
-            if pn in ("alacarte", "alacarte_kit"):
-                inc_field = "alacarte_plans_purchased" if pn == "alacarte" else "launch_kits_generated"
-                await db.users.update_one({"user_id": txn["user_id"]}, {"$inc": {inc_field: 0}})  # just mark paid
-            else:
-                await db.users.update_one({"user_id": txn["user_id"]}, {"$set": {"subscription_tier": pn}})
+            await _grant_plan_access(txn["user_id"], pn, txn)
         return {"status": sr.status, "payment_status": sr.payment_status, "plan": txn.get("plan_name")}
     except Exception as e:
         logger.error(f"Payment status error: {e}")
@@ -1058,15 +1107,29 @@ async def stripe_webhook(request: Request):
                 await db.payment_transactions.update_one({"session_id": sid}, {"$set": {"status": "complete", "payment_status": "paid", "updated_at": datetime.now(timezone.utc).isoformat()}})
                 pn = meta.get("plan", txn.get("plan_name", "starter"))
                 uid = meta.get("user_id", txn.get("user_id"))
-                if uid:
-                    if pn in ("alacarte", "alacarte_kit"):
-                        pass  # already tracked
-                    else:
-                        await db.users.update_one({"user_id": uid}, {"$set": {"subscription_tier": pn}})
+                await _grant_plan_access(uid, pn, txn)
         return {"status": "ok"}
     except Exception as e:
         logger.error(f"Webhook error: {e}")
         return {"status": "error"}
+
+
+# ─── FOUNDERS LIFETIME — public seat counter for scarcity ───
+@api_router.get("/founders/seats")
+async def founders_seats():
+    """Public endpoint — returns Founders Lifetime seats sold/remaining for scarcity counter."""
+    sold = await db.payment_transactions.count_documents(
+        {"plan_name": "lifetime", "payment_status": "paid"}
+    )
+    remaining = max(0, FOUNDERS_LIFETIME_SEAT_LIMIT - sold)
+    return {
+        "sold": sold,
+        "limit": FOUNDERS_LIFETIME_SEAT_LIMIT,
+        "remaining": remaining,
+        "price": FOUNDERS_LIFETIME_PRICE,
+        "instant_kit_price": INSTANT_KIT_PRICE,
+        "available": remaining > 0,
+    }
 
 # ─── PROFILE ───
 @api_router.get("/profile")

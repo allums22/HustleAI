@@ -179,4 +179,7 @@ export const api = {
   unsubscribePush: (sub: { endpoint: string; keys: any }) =>
     request('/api/push/unsubscribe', { method: 'POST', body: JSON.stringify(sub) }),
   sendTestPush: () => request('/api/push/send-test', { method: 'POST' }),
+
+  // 🔥 Founders Lifetime + Instant Kit
+  getFoundersSeats: () => fetch(`${BACKEND_URL}/api/founders/seats`).then(r => r.json()),
 };
