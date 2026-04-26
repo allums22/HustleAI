@@ -1106,8 +1106,11 @@ async def get_payment_status(session_id: str, user: dict = Depends(get_current_u
 async def stripe_webhook(request: Request):
     body = await request.body()
     sig = request.headers.get("Stripe-Signature", "")
+    webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
     try:
-        sc = StripeCheckout(api_key=stripe_key, webhook_url=str(request.base_url) + "api/webhook/stripe")
+        sc = StripeCheckout(api_key=stripe_key,
+                            webhook_url=str(request.base_url) + "api/webhook/stripe",
+                            webhook_secret=webhook_secret or None)
         wr = await sc.handle_webhook(body, sig)
         if wr and wr.payment_status == "paid":
             sid = wr.session_id
