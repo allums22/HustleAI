@@ -189,6 +189,15 @@ export default function HomeScreen() {
         <View style={s.footer}>
           <Text style={s.footerDomain}>hustleai.live</Text>
           <Text style={s.footerCompany}>A nexus28 product</Text>
+          <View style={s.legalRow}>
+            <TouchableOpacity onPress={() => router.push('/legal/terms')}><Text style={s.legalLink}>Terms</Text></TouchableOpacity>
+            <Text style={s.legalDot}>·</Text>
+            <TouchableOpacity onPress={() => router.push('/legal/privacy')}><Text style={s.legalLink}>Privacy</Text></TouchableOpacity>
+            <Text style={s.legalDot}>·</Text>
+            <TouchableOpacity onPress={() => router.push('/legal/refund-policy')}><Text style={s.legalLink}>Refund Policy</Text></TouchableOpacity>
+            <Text style={s.legalDot}>·</Text>
+            <TouchableOpacity onPress={() => router.push('/legal/contact')}><Text style={s.legalLink}>Contact</Text></TouchableOpacity>
+          </View>
           <TouchableOpacity onPress={handleBetaClick}>
             <Text style={s.footerBeta}>Beta Tester Access →</Text>
           </TouchableOpacity>
@@ -260,4 +269,7 @@ const s = StyleSheet.create({
   footerDomain: { fontSize: 14, fontWeight: '800', color: '#FAFAFA', letterSpacing: 0.5 },
   footerCompany: { fontSize: 12, color: '#71717A' },
   footerBeta: { fontSize: 13, fontWeight: '600', color: Colors.gold, marginTop: 8 },
+  legalRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' as const, justifyContent: 'center', gap: 6, marginTop: 8 },
+  legalLink: { fontSize: 12, color: '#A1A1AA', fontWeight: '600', textDecorationLine: 'underline' as const },
+  legalDot: { fontSize: 12, color: '#52525B' },
 });
