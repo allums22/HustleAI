@@ -442,7 +442,15 @@ export default function DashboardScreen() {
               </TouchableOpacity>
             </View>
           ) : (
-            hustles.slice(0, 3).map((h) => (
+            [...hustles]
+              .sort((a, b) => {
+                // Recently explored first, then most recently generated
+                const aTime = a.researched_at || a.created_at || '';
+                const bTime = b.researched_at || b.created_at || '';
+                return bTime.localeCompare(aTime);
+              })
+              .slice(0, 3)
+              .map((h) => (
               <TouchableOpacity
                 key={h.hustle_id}
                 testID={`hustle-card-${h.hustle_id}`}
@@ -454,6 +462,12 @@ export default function DashboardScreen() {
                   <View style={[styles.categoryBadge, { backgroundColor: h.selected ? Colors.growthGreenLight : Colors.trustBlueLight }]}>
                     <Text style={[styles.categoryText, { color: h.selected ? Colors.growthGreen : Colors.trustBlue }]}>{h.category}</Text>
                   </View>
+                  {h.researched && (
+                    <View style={styles.exploredPill}>
+                      <Ionicons name="eye" size={11} color={Colors.gold} />
+                      <Text style={styles.exploredPillText}>Explored</Text>
+                    </View>
+                  )}
                   {h.selected && <Ionicons name="checkmark-circle" size={20} color={Colors.growthGreen} />}
                 </View>
                 <Text style={styles.hustleName}>{h.name}</Text>
@@ -607,6 +621,8 @@ const styles = StyleSheet.create({
   hustleCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   categoryBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
   categoryText: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
+  exploredPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: Colors.orangeLight, marginLeft: 'auto' as const },
+  exploredPillText: { fontSize: 10, fontWeight: '800', color: Colors.gold, letterSpacing: 0.4 },
   hustleName: { fontSize: 17, fontWeight: '700', color: Colors.textPrimary, marginBottom: 4 },
   hustleDesc: { fontSize: 13, color: Colors.textSecondary, lineHeight: 18 },
   hustleFooter: { flexDirection: 'row', gap: 16, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.borderLight },

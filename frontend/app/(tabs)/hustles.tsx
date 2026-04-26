@@ -94,7 +94,7 @@ export default function HustlesScreen() {
             style={[styles.filterBtn, filter === f && styles.filterBtnActive]}
             onPress={() => setFilter(f)}>
             <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>
-              {f === 'all' ? 'All' : f === 'researched' ? 'Researched' : f === 'starter' ? 'Starter' : 'Premium'}
+              {f === 'all' ? 'All' : f === 'researched' ? 'Explored' : f === 'starter' ? 'Starter' : 'Premium'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -103,7 +103,17 @@ export default function HustlesScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadHustles(); }} />}>
         {filtered.length === 0 ? (
-          <View style={styles.emptyState}><Ionicons name="search" size={40} color={Colors.textTertiary} /><Text style={styles.emptyText}>{filter === 'researched' ? 'No researched hustles yet. Tap on a hustle to explore it!' : 'No hustles found'}</Text></View>
+          <View style={styles.emptyState}>
+            <Ionicons name={filter === 'researched' ? 'rocket-outline' : 'search'} size={40} color={Colors.textTertiary} />
+            <Text style={styles.emptyText}>
+              {filter === 'researched'
+                ? "You haven't explored any hustles yet."
+                : 'No hustles found'}
+            </Text>
+            {filter === 'researched' && (
+              <Text style={styles.emptyHint}>Tap "All" above, then tap any hustle card to dive in. Once you open a hustle, it'll appear here.</Text>
+            )}
+          </View>
         ) : (
           Object.entries(
             filtered.reduce((groups: Record<string, any[]>, h: any) => {
@@ -225,6 +235,7 @@ const styles = StyleSheet.create({
   listContent: { paddingHorizontal: 24, paddingBottom: 24, maxWidth: 1000, alignSelf: 'center', width: '100%' },
   emptyState: { alignItems: 'center', paddingTop: 60, gap: 8 },
   emptyText: { fontSize: 16, color: Colors.textTertiary },
+  emptyHint: { fontSize: 13, color: Colors.textTertiary, textAlign: 'center', paddingHorizontal: 32, lineHeight: 18, marginTop: 4 },
   card: { backgroundColor: Colors.surface, borderRadius: 12, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: Colors.border },
   cardLocked: { borderColor: Colors.orangeCTA + '40', backgroundColor: Colors.surface },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
