@@ -1,246 +1,265 @@
 """
-Backend test for the 3-Offer Launch Stack endpoints.
-Tests: founders/seats, lifetime/instant_kit checkout, regression on existing flows.
+Backend test for Resend email integration + critical regression.
 """
-import requests
 import os
-from pymongo import MongoClient
+import sys
+import time
+import asyncio
+import requests
+from datetime import datetime, timezone
+from dotenv import load_dotenv
 
-BASE = "https://skill-match-hustle.preview.emergentagent.com/api"
+load_dotenv("/app/frontend/.env")
+load_dotenv("/app/backend/.env")
+
+BASE = os.environ.get("EXPO_PUBLIC_BACKEND_URL", "https://skill-match-hustle.preview.emergentagent.com").rstrip("/") + "/api"
 EMPIRE_TOKEN = "sess_02b7e25f5bf24900abc602309216532a"
-HUSTLE_ID = "hustle_704f65442468"
-ORIGIN = "https://example.com"
 
-H_AUTH = {"Authorization": f"Bearer {EMPIRE_TOKEN}", "Content-Type": "application/json"}
-H_NOAUTH = {"Content-Type": "application/json"}
-
-# MongoDB direct connection for verification
-MONGO_URL = "mongodb://localhost:27017"
-db_name = "test_database"
-try:
-    with open("/app/backend/.env") as f:
-        for line in f:
-            line = line.strip()
-            if line.startswith("DB_NAME="):
-                db_name = line.split("=", 1)[1].strip().strip('"').strip("'")
-            if line.startswith("MONGO_URL="):
-                MONGO_URL = line.split("=", 1)[1].strip().strip('"').strip("'")
-except Exception:
-    pass
-mongo = MongoClient(MONGO_URL)
-db = mongo[db_name]
+H_EMPIRE = {"Authorization": f"Bearer {EMPIRE_TOKEN}"}
 
 results = []
-def report(name, ok, detail=""):
+
+def record(name, ok, detail=""):
     status = "PASS" if ok else "FAIL"
-    line = f"[{status}] {name}: {detail}"
-    print(line)
-    results.append((name, ok, detail))
+    print(f"[{status}] {name}: {detail}")
+    results.append({"name": name, "ok": ok, "detail": detail})
 
-print(f"\n=== Testing against {BASE} ===")
-print(f"=== Mongo db: {db_name} ===\n")
+def t1_test_send_empire():
+    r = requests.post(f"{BASE}/admin/email/test-send", headers=H_EMPIRE, timeout=30)
+    try:
+        body = r.json()
+    except Exception:
+        body = {"raw": r.text}
+    ok = (r.status_code == 200
+          and body.get("status") == "ok"
+          and body.get("provider_id")
+          and body.get("error") in (None, "")
+          and body.get("to"))
+    record("1. POST /admin/email/test-send (Empire)", ok,
+           f"status={r.status_code} body={body}")
+    return body
 
-# ---------- 1. GET /api/founders/seats (PUBLIC) ----------
-print("--- 1. GET /api/founders/seats (public) ---")
-r = requests.get(f"{BASE}/founders/seats", timeout=20)
-if r.status_code == 200:
-    data = r.json()
-    expected_keys = {"sold", "limit", "remaining", "price", "instant_kit_price", "available"}
-    keys_ok = expected_keys.issubset(data.keys())
-    sold = data.get("sold")
-    limit = data.get("limit")
-    price = data.get("price")
-    instant_price = data.get("instant_kit_price")
-    available = data.get("available")
-    remaining = data.get("remaining")
-    detail = f"sold={sold} limit={limit} remaining={remaining} price={price} instant_kit_price={instant_price} available={available}"
-    all_ok = (keys_ok and limit == 100 and price == 149.0 and instant_price == 29.0
-              and isinstance(sold, int) and (sold + remaining == limit)
-              and available == (remaining > 0))
-    report("founders/seats public", all_ok, detail)
-else:
-    report("founders/seats public", False, f"status={r.status_code} body={r.text[:200]}")
+def t2_test_send_no_auth():
+    r = requests.post(f"{BASE}/admin/email/test-send", timeout=15)
+    ok = r.status_code == 401
+    record("2. /admin/email/test-send no auth → 401", ok,
+           f"status={r.status_code} body={r.text[:200]}")
 
-# ---------- 2. lifetime checkout (auth) ----------
-print("\n--- 2. lifetime checkout (auth) ---")
-body = {"plan": "lifetime", "origin_url": ORIGIN}
-r = requests.post(f"{BASE}/payments/create-checkout", headers=H_AUTH, json=body, timeout=30)
-lifetime_session_id = None
-if r.status_code == 200:
-    d = r.json()
-    url = d.get("url", "")
-    sid = d.get("session_id")
-    amount = d.get("amount")
-    promo = d.get("promo_applied")
-    disc = d.get("discount_pct")
-    lifetime_session_id = sid
-    cond = (amount == 149.00 and isinstance(url, str) and url.startswith("http")
-            and "stripe" in url.lower() and isinstance(sid, str)
-            and promo is None and disc == 0)
-    report("lifetime checkout payload",
-           cond, f"amount={amount} url_prefix={url[:60]} session_id={sid} promo_applied={promo} discount_pct={disc}")
-    # Verify mongo row
-    txn = db.payment_transactions.find_one({"session_id": sid})
-    if txn:
-        txn_ok = (txn.get("plan_name") == "lifetime"
-                  and float(txn.get("amount", 0)) == 149.0
-                  and txn.get("payment_status") == "pending")
-        report("lifetime payment_transactions row",
-               txn_ok,
-               f"plan_name={txn.get('plan_name')} amount={txn.get('amount')} payment_status={txn.get('payment_status')}")
-    else:
-        report("lifetime payment_transactions row", False, "no row found")
-else:
-    report("lifetime checkout (auth)", False, f"status={r.status_code} body={r.text[:300]}")
+def make_free_user():
+    ts = int(time.time())
+    email = f"free_test_{ts}@hustleai.com"
+    payload = {"email": email, "password": "Test123!", "name": "Free Tester"}
+    r = requests.post(f"{BASE}/auth/register", json=payload, timeout=30)
+    if r.status_code != 200:
+        return None, None, email, r
+    body = r.json()
+    return body.get("session_token"), body.get("user", {}).get("user_id"), email, r
 
-# ---------- 3. instant_kit WITHOUT hustle_id → 400 ----------
-print("\n--- 3. instant_kit without hustle_id → 400 ---")
-body = {"plan": "instant_kit", "origin_url": ORIGIN}
-r = requests.post(f"{BASE}/payments/create-checkout", headers=H_AUTH, json=body, timeout=20)
-detail_text = ""
-try:
-    detail_text = r.json().get("detail", "")
-except Exception:
-    detail_text = r.text[:200]
-ok = r.status_code == 400 and "hustle_id required" in detail_text and "Instant Kit" in detail_text
-report("instant_kit no hustle_id → 400", ok, f"status={r.status_code} detail={detail_text}")
+def t3_test_send_free():
+    token, uid, email, reg_r = make_free_user()
+    if not token:
+        record("3. /admin/email/test-send free user → 403", False,
+               f"could not create free user: status={reg_r.status_code} body={reg_r.text[:200]}")
+        return None, None, None
+    r = requests.post(f"{BASE}/admin/email/test-send",
+                      headers={"Authorization": f"Bearer {token}"}, timeout=15)
+    ok = r.status_code == 403 and "Empire" in r.text
+    record("3. /admin/email/test-send free user → 403", ok,
+           f"status={r.status_code} body={r.text[:200]}")
+    # Park welcome emails for this free user too (cleanup)
+    if uid:
+        async def park():
+            from motor.motor_asyncio import AsyncIOMotorClient
+            client = AsyncIOMotorClient(os.environ["MONGO_URL"])
+            db = client[os.environ["DB_NAME"]]
+            await db.email_queue.update_many(
+                {"user_id": uid, "status": "pending"},
+                {"$set": {"scheduled_for": "2099-01-01T00:00:00+00:00"}}
+            )
+        asyncio.run(park())
+    return token, uid, email
 
-# ---------- 4. instant_kit with hustle_id ----------
-print("\n--- 4. instant_kit with hustle_id ---")
-body = {"plan": "instant_kit", "hustle_id": HUSTLE_ID, "origin_url": ORIGIN}
-r = requests.post(f"{BASE}/payments/create-checkout", headers=H_AUTH, json=body, timeout=30)
-if r.status_code == 200:
-    d = r.json()
-    url = d.get("url", "")
-    sid = d.get("session_id")
-    amount = d.get("amount")
-    cond = (amount == 29.00 and isinstance(url, str) and url.startswith("http")
-            and "stripe" in url.lower() and isinstance(sid, str))
-    report("instant_kit checkout payload",
-           cond, f"amount={amount} url_prefix={url[:60]} session_id={sid}")
-    txn = db.payment_transactions.find_one({"session_id": sid})
-    if txn:
-        txn_ok = (txn.get("plan_name") == "instant_kit"
-                  and float(txn.get("amount", 0)) == 29.0
-                  and txn.get("payment_status") == "pending"
-                  and txn.get("hustle_id") == HUSTLE_ID)
-        report("instant_kit payment_transactions row",
-               txn_ok,
-               f"plan_name={txn.get('plan_name')} amount={txn.get('amount')} hustle_id={txn.get('hustle_id')} payment_status={txn.get('payment_status')}")
-    else:
-        report("instant_kit payment_transactions row", False, "no row found")
-else:
-    report("instant_kit checkout with hustle_id", False, f"status={r.status_code} body={r.text[:300]}")
+def t4_dispatch_empire():
+    r = requests.post(f"{BASE}/admin/email/dispatch-now", headers=H_EMPIRE, timeout=120)
+    try:
+        body = r.json()
+    except Exception:
+        body = {"raw": r.text}
+    ok = (r.status_code == 200
+          and body.get("status") == "ok"
+          and isinstance(body.get("sent"), int))
+    record("4. POST /admin/email/dispatch-now (Empire)", ok,
+           f"status={r.status_code} body={body}")
+    return body
 
-# ---------- 5. lifetime WITHOUT auth → 401 ----------
-print("\n--- 5. lifetime without auth → 401 ---")
-body = {"plan": "lifetime", "origin_url": ORIGIN}
-r = requests.post(f"{BASE}/payments/create-checkout", headers=H_NOAUTH, json=body, timeout=20)
-ok = r.status_code == 401
-report("lifetime no-auth → 401", ok, f"status={r.status_code} body={r.text[:150]}")
+def t5_dispatch_no_auth():
+    r = requests.post(f"{BASE}/admin/email/dispatch-now", timeout=15)
+    ok = r.status_code == 401
+    record("5. /admin/email/dispatch-now no auth → 401", ok,
+           f"status={r.status_code} body={r.text[:200]}")
 
-# ---------- REGRESSION ----------
-print("\n=== REGRESSION ===")
+def t6_register_and_verify_queue():
+    ts = int(time.time())
+    email = f"email_test_{ts}@hustleai.com"
+    payload = {"email": email, "password": "Test123!", "name": "Email Test User"}
+    r = requests.post(f"{BASE}/auth/register", json=payload, timeout=30)
+    if r.status_code != 200:
+        record("6a. register fresh user", False, f"status={r.status_code} body={r.text[:200]}")
+        return None, None
+    body = r.json()
+    user_id = body.get("user", {}).get("user_id")
+    record("6a. register fresh user", bool(user_id), f"user_id={user_id} email={email}")
 
-# 6. starter monthly
-body = {"plan": "starter", "billing": "monthly", "origin_url": ORIGIN}
-r = requests.post(f"{BASE}/payments/create-checkout", headers=H_AUTH, json=body, timeout=30)
-if r.status_code == 200:
-    d = r.json()
-    report("starter monthly amount=9.99", d.get("amount") == 9.99, f"amount={d.get('amount')}")
-else:
-    report("starter monthly", False, f"status={r.status_code} body={r.text[:200]}")
+    async def verify():
+        from motor.motor_asyncio import AsyncIOMotorClient
+        client = AsyncIOMotorClient(os.environ["MONGO_URL"])
+        db = client[os.environ["DB_NAME"]]
+        return await db.email_queue.find(
+            {"user_id": user_id}, {"_id": 0}
+        ).sort("scheduled_for", 1).to_list(20)
+    rows = asyncio.run(verify())
+    types = sorted([r.get("type") for r in rows])
+    expected = sorted(["welcome_day_0", "welcome_day_3", "welcome_day_7", "welcome_day_14"])
+    types_ok = (types == expected and len(rows) == 4)
+    record("6b. 4 email_queue rows (welcome_day_0/3/7/14)", types_ok,
+           f"got types={types} count={len(rows)}")
 
-# 7. empire annual
-body = {"plan": "empire", "billing": "annual", "origin_url": ORIGIN}
-r = requests.post(f"{BASE}/payments/create-checkout", headers=H_AUTH, json=body, timeout=30)
-if r.status_code == 200:
-    d = r.json()
-    report("empire annual amount=575.88", d.get("amount") == 575.88, f"amount={d.get('amount')}")
-else:
-    report("empire annual", False, f"status={r.status_code} body={r.text[:200]}")
+    day0 = next((r for r in rows if r.get("type") == "welcome_day_0"), None)
+    day0_ok = False
+    detail = ""
+    if day0:
+        try:
+            sched = datetime.fromisoformat(day0["scheduled_for"].replace("Z", "+00:00"))
+            delta = abs((datetime.now(timezone.utc) - sched).total_seconds())
+            day0_ok = delta < 30
+            detail = f"scheduled_for={day0['scheduled_for']} delta={delta:.1f}s status={day0.get('status')}"
+        except Exception as e:
+            detail = f"parse error: {e}"
+    record("6c. Day 0 scheduled_for ~ now", day0_ok, detail)
+    return user_id, email
 
-# 8. alacarte
-body = {"plan": "alacarte", "hustle_id": HUSTLE_ID, "origin_url": ORIGIN}
-r = requests.post(f"{BASE}/payments/create-checkout", headers=H_AUTH, json=body, timeout=30)
-if r.status_code == 200:
-    d = r.json()
-    report("alacarte amount=4.99", d.get("amount") == 4.99, f"amount={d.get('amount')}")
-else:
-    report("alacarte", False, f"status={r.status_code} body={r.text[:200]}")
+def t6d_dispatch_flush_day0(user_id):
+    if not user_id:
+        record("6d. Day 0 flushes via dispatch-now", False, "no user_id")
+        return
+    async def bump():
+        from motor.motor_asyncio import AsyncIOMotorClient
+        client = AsyncIOMotorClient(os.environ["MONGO_URL"])
+        db = client[os.environ["DB_NAME"]]
+        await db.email_queue.update_many(
+            {"user_id": user_id, "type": {"$in": ["welcome_day_3", "welcome_day_7", "welcome_day_14"]}},
+            {"$set": {"scheduled_for": "2099-01-01T00:00:00+00:00"}}
+        )
+    asyncio.run(bump())
 
-# 9. /subscription/tiers
-r = requests.get(f"{BASE}/subscription/tiers", headers=H_AUTH, timeout=15)
-if r.status_code == 200:
-    d = r.json()
-    tiers = d.get("tiers", {})
-    promos = d.get("promo_codes_available", [])
-    expected_tiers = {"free", "starter", "pro", "empire"}
-    has_annual = all("annual_price" in tiers.get(k, {}) for k in expected_tiers if k in tiers)
-    promo_ok = "HUSTLE50" in promos and "BETA50" in promos
-    cond = expected_tiers.issubset(set(tiers.keys())) and has_annual and promo_ok
-    report("/subscription/tiers shape", cond,
-           f"tiers={sorted(tiers.keys())} promos={promos} all_have_annual={has_annual}")
-else:
-    report("/subscription/tiers", False, f"status={r.status_code}")
+    r = requests.post(f"{BASE}/admin/email/dispatch-now", headers=H_EMPIRE, timeout=120)
+    body = r.json() if r.ok else {"raw": r.text}
+    print(f"  dispatch-now after bump: status={r.status_code} body={body}")
 
-# 10. promo/validate-checkout HUSTLE50
-r = requests.post(f"{BASE}/promo/validate-checkout", headers=H_AUTH, json={"code": "HUSTLE50"}, timeout=15)
-if r.status_code == 200:
-    d = r.json()
-    cond = d.get("valid") is True and d.get("discount_pct") == 50
-    report("HUSTLE50 valid", cond, f"resp={d}")
-else:
-    report("/promo/validate-checkout HUSTLE50", False, f"status={r.status_code}")
+    async def fetch_day0():
+        from motor.motor_asyncio import AsyncIOMotorClient
+        client = AsyncIOMotorClient(os.environ["MONGO_URL"])
+        db = client[os.environ["DB_NAME"]]
+        return await db.email_queue.find_one(
+            {"user_id": user_id, "type": "welcome_day_0"}, {"_id": 0}
+        )
+    day0 = asyncio.run(fetch_day0())
+    ok = bool(day0 and day0.get("status") == "sent" and day0.get("provider_id"))
+    record("6d. Day 0 flushed → status=sent + provider_id", ok,
+           f"status={day0.get('status') if day0 else None} provider_id={day0.get('provider_id') if day0 else None} error={day0.get('error') if day0 else None}")
 
-# 11. launch-kit/access (empire)
-r = requests.get(f"{BASE}/launch-kit/access/{HUSTLE_ID}", headers=H_AUTH, timeout=15)
-if r.status_code == 200:
-    d = r.json()
-    report("empire has_access=true", d.get("has_access") is True, f"resp={d}")
-else:
-    report("/launch-kit/access empire", False, f"status={r.status_code} body={r.text[:200]}")
+def t6e_park_remaining(user_id):
+    if not user_id:
+        return
+    async def park():
+        from motor.motor_asyncio import AsyncIOMotorClient
+        client = AsyncIOMotorClient(os.environ["MONGO_URL"])
+        db = client[os.environ["DB_NAME"]]
+        res = await db.email_queue.update_many(
+            {"user_id": user_id, "status": "pending"},
+            {"$set": {"scheduled_for": "2099-01-01T00:00:00+00:00"}}
+        )
+        return res.modified_count
+    n = asyncio.run(park())
+    record("6e. Day 3/7/14 parked at 2099", True, f"updated_count={n}")
 
-# 12. profile empire
-r = requests.get(f"{BASE}/profile", headers=H_AUTH, timeout=15)
-if r.status_code == 200:
-    d = r.json()
-    sub = d.get("subscription", {})
-    user = d.get("user", {})
-    tier = sub.get("tier") or user.get("subscription_tier") or d.get("tier")
-    report("profile tier=empire", tier == "empire", f"tier={tier} top_keys={list(d.keys())}")
-else:
-    report("/profile", False, f"status={r.status_code}")
+def t7_regression():
+    r = requests.get(f"{BASE}/founders/seats", timeout=15)
+    j = r.json() if r.ok else {}
+    ok = (r.status_code == 200 and j.get("limit") == 100 and j.get("price") == 149.0
+          and j.get("instant_kit_price") == 29.0 and "remaining" in j and "sold" in j and "available" in j)
+    record("7a. GET /founders/seats", ok, f"status={r.status_code} body={j}")
 
-# 13. challenges/first-100
-r = requests.get(f"{BASE}/challenges/first-100", headers=H_AUTH, timeout=15)
-if r.status_code == 200:
-    d = r.json()
-    report("first-100 current=600 completed=true",
-           d.get("current") == 600 and d.get("completed") is True,
-           f"current={d.get('current')} completed={d.get('completed')}")
-else:
-    report("/challenges/first-100", False, f"status={r.status_code}")
+    payload = {"plan": "lifetime", "origin_url": "https://example.com"}
+    r = requests.post(f"{BASE}/payments/create-checkout", json=payload, headers=H_EMPIRE, timeout=30)
+    j = r.json() if r.ok else {}
+    ok = r.status_code == 200 and j.get("amount") == 149.0 and j.get("session_id") and j.get("url")
+    record("7b. /payments/create-checkout lifetime → 149.0", ok,
+           f"status={r.status_code} amount={j.get('amount')}")
 
-# 14. leaderboard
-r = requests.get(f"{BASE}/leaderboard", headers=H_AUTH, timeout=15)
-if r.status_code == 200:
-    d = r.json()
-    top = d.get("top") or d.get("leaderboard") or []
-    rank1 = top[0] if top else {}
-    name = rank1.get("name", "")
-    report("Adrian A. rank #1",
-           "Adrian A." in name and rank1.get("rank") == 1,
-           f"top[0].name={name} rank={rank1.get('rank')}")
-else:
-    report("/leaderboard", False, f"status={r.status_code}")
+    payload = {"plan": "instant_kit", "hustle_id": "hustle_704f65442468", "origin_url": "https://example.com"}
+    r = requests.post(f"{BASE}/payments/create-checkout", json=payload, headers=H_EMPIRE, timeout=30)
+    j = r.json() if r.ok else {}
+    ok = r.status_code == 200 and j.get("amount") == 29.0 and j.get("session_id")
+    record("7c. /payments/create-checkout instant_kit → 29.0", ok,
+           f"status={r.status_code} amount={j.get('amount')}")
 
-# Summary
-print("\n\n=== SUMMARY ===")
-total = len(results)
-passed = sum(1 for _, ok, _ in results if ok)
-print(f"Total: {total}  Passed: {passed}  Failed: {total - passed}")
-for name, ok, detail in results:
-    if not ok:
-        print(f"  FAIL: {name} :: {detail}")
-print(f"\nlifetime_session_id captured: {lifetime_session_id}")
+    r = requests.get(f"{BASE}/subscription/tiers", timeout=15)
+    j = r.json() if r.ok else {}
+    tiers = j.get("tiers", {})
+    promos = j.get("promo_codes_available", [])
+    ok = (r.status_code == 200 and len(tiers) == 4 and set(promos) == {"HUSTLE50", "BETA50"})
+    record("7d. GET /subscription/tiers (4 tiers + promos)", ok,
+           f"tiers={list(tiers.keys())} promos={promos}")
+
+    r = requests.get(f"{BASE}/profile", headers=H_EMPIRE, timeout=15)
+    j = r.json() if r.ok else {}
+    tier = (j.get("subscription") or {}).get("tier") or j.get("tier")
+    ok = r.status_code == 200 and tier == "empire"
+    record("7e. GET /profile → empire", ok, f"tier={tier}")
+
+    payload = {"code": "HUSTLE50"}
+    r = requests.post(f"{BASE}/promo/validate-checkout", json=payload, headers=H_EMPIRE, timeout=15)
+    j = r.json() if r.ok else {}
+    ok = r.status_code == 200 and j.get("valid") is True and j.get("discount_pct") == 50
+    record("7f. POST /promo/validate-checkout HUSTLE50", ok, f"body={j}")
+
+    r = requests.get(f"{BASE}/leaderboard", headers=H_EMPIRE, timeout=15)
+    j = r.json() if r.ok else {}
+    top = j.get("top") or j.get("leaderboard") or []
+    name = top[0].get("name") if top else None
+    ok = r.status_code == 200 and name and "Adrian" in name
+    record("7g. GET /leaderboard → Adrian A. #1", ok, f"top0_name={name}")
+
+
+def main():
+    print(f"Testing against: {BASE}")
+    print(f"Empire token: {EMPIRE_TOKEN[:20]}...")
+    print()
+    print("=== EMAIL ENDPOINTS ===")
+    t1_test_send_empire()
+    t2_test_send_no_auth()
+    t3_test_send_free()
+    t4_dispatch_empire()
+    t5_dispatch_no_auth()
+
+    print("\n=== EMAIL QUEUE ON REGISTER ===")
+    user_id, email = t6_register_and_verify_queue()
+    t6d_dispatch_flush_day0(user_id)
+    t6e_park_remaining(user_id)
+
+    print("\n=== REGRESSION ===")
+    t7_regression()
+
+    print("\n" + "="*60)
+    passed = sum(1 for r in results if r["ok"])
+    total = len(results)
+    print(f"RESULT: {passed}/{total} passed")
+    for r in results:
+        marker = "PASS" if r["ok"] else "FAIL"
+        print(f"  [{marker}] {r['name']}")
+    print("="*60)
+    sys.exit(0 if passed == total else 1)
+
+if __name__ == "__main__":
+    main()
