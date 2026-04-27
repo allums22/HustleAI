@@ -66,8 +66,10 @@ export default function DashboardScreen() {
         ]);
         setLiveActivity(liveRes.activities || []);
         setFirst100(f100Res);
-        // Auto-prompt check-in once per day
-        if (!checkinRes.checked_in) {
+        // Auto-prompt check-in once per day — but ONLY for users with at least 1 day of activity.
+        // First-time/empty-state users should see the dashboard, not a feelings modal.
+        const userIsActive = (hustlesRes.hustles || []).some((h: any) => h.researched || h.selected);
+        if (!checkinRes.checked_in && userIsActive) {
           setTimeout(() => setShowCheckin(true), 1500);
         }
         setScorecardId(scRes?.scorecard?.scorecard_id || '');

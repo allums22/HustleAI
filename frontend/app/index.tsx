@@ -75,8 +75,8 @@ export default function HomeScreen() {
         {/* Hero */}
         <View style={s.hero}>
           <View style={s.badge}>
-            <View style={s.badgeDot} />
-            <Text style={s.badgeText}>Coming Soon</Text>
+            <View style={s.badgeDotLive} />
+            <Text style={s.badgeText}>LIVE · Founders Pricing</Text>
           </View>
 
           <Text style={s.heroTitle}>
@@ -87,6 +87,43 @@ export default function HomeScreen() {
             HustleAI discovers personalized side hustles, generates 30-day business plans, builds launch-ready landing pages, and gives you a team of AI agents to grow your income.
           </Text>
 
+          {/* Primary CTAs — drive to register + pricing */}
+          <View style={s.ctaRow}>
+            <TouchableOpacity
+              testID="hero-get-started-btn"
+              style={s.ctaPrimary}
+              onPress={() => { api.trackEvent('hero_cta_get_started', {}); router.push('/register'); }}
+              activeOpacity={0.85}
+            >
+              <Text style={s.ctaPrimaryText}>Get Started Free</Text>
+              <Ionicons name="arrow-forward" size={18} color="#000" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              testID="hero-see-pricing-btn"
+              style={s.ctaSecondary}
+              onPress={() => { api.trackEvent('hero_cta_pricing', {}); router.push('/pricing'); }}
+              activeOpacity={0.85}
+            >
+              <Text style={s.ctaSecondaryText}>See Founders Pricing</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Trust badges */}
+          <View style={s.trustRow}>
+            <View style={s.trustBadge}>
+              <Ionicons name="shield-checkmark" size={13} color={Colors.growthGreen} />
+              <Text style={s.trustText}>30-day money-back</Text>
+            </View>
+            <View style={s.trustBadge}>
+              <Ionicons name="lock-closed" size={13} color={Colors.trustBlue} />
+              <Text style={s.trustText}>Stripe-secured</Text>
+            </View>
+            <View style={s.trustBadge}>
+              <Ionicons name="flash" size={13} color={Colors.gold} />
+              <Text style={s.trustText}>Instant access</Text>
+            </View>
+          </View>
+
           {/* Social proof — live waitlist count */}
           <View style={s.socialProof}>
             <View style={s.socialDots}>
@@ -95,7 +132,7 @@ export default function HomeScreen() {
               <View style={[s.avatarDot, { backgroundColor: '#EC4899', marginLeft: -8 }]} />
             </View>
             <Text style={s.socialText}>
-              <Text style={s.socialNumber}>{totalJoined.toLocaleString()}</Text> hustlers already joined
+              <Text style={s.socialNumber}>{totalJoined.toLocaleString()}</Text> hustlers already in
             </Text>
           </View>
         </View>
@@ -143,46 +180,35 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        {/* Email Capture */}
-        <View style={s.emailSection}>
-          <Ionicons name="mail-outline" size={28} color={Colors.gold} />
-          <Text style={s.emailTitle}>Be First to Launch</Text>
-          <Text style={s.emailSub}>Get notified when HustleAI opens to the public</Text>
-
-          {subscribed ? (
-            <View style={s.subscribedBox}>
-              <Ionicons name="checkmark-circle" size={20} color={Colors.growthGreenText} />
-              <Text style={s.subscribedText}>
-                You're #{position || totalJoined} on the waitlist! We'll notify you at launch.
-              </Text>
-            </View>
-          ) : (
-            <>
-              <View style={s.emailInputRow}>
-                <TextInput
-                  style={s.emailInput}
-                  placeholder="you@email.com"
-                  placeholderTextColor={Colors.textTertiary}
-                  value={email}
-                  onChangeText={(t) => { setEmail(t); if (errorMsg) setErrorMsg(''); }}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  editable={!submitting}
-                  onSubmitEditing={handleNotify}
-                />
-                <TouchableOpacity
-                  testID="waitlist-btn"
-                  style={[s.emailBtn, submitting && { opacity: 0.6 }]}
-                  onPress={handleNotify}
-                  activeOpacity={0.85}
-                  disabled={submitting}
-                >
-                  <Text style={s.emailBtnText}>{submitting ? 'Joining…' : 'Notify Me'}</Text>
-                </TouchableOpacity>
-              </View>
-              {errorMsg ? <Text style={s.errorMsg}>{errorMsg}</Text> : null}
-            </>
-          )}
+        {/* Founders Pricing CTA Banner */}
+        <View style={s.foundersBanner}>
+          <View style={s.foundersBadgeRow}>
+            <Ionicons name="flame" size={14} color="#fff" />
+            <Text style={s.foundersBadgeText}>FOUNDERS · LIMITED TO 100 SEATS</Text>
+          </View>
+          <Text style={s.foundersTitle}>Skip the subscription.{'\n'}Pay once.</Text>
+          <Text style={s.foundersSub}>
+            $149 lifetime access to everything we ever ship — or $29 for one complete launch kit. No subscriptions. 30-day refund.
+          </Text>
+          <View style={s.foundersBtnRow}>
+            <TouchableOpacity
+              testID="landing-lifetime-cta"
+              style={s.foundersPrimary}
+              onPress={() => { api.trackEvent('landing_lifetime_cta', {}); router.push('/pricing'); }}
+              activeOpacity={0.85}
+            >
+              <Text style={s.foundersPrimaryText}>Get Lifetime — $149</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              testID="landing-kit-cta"
+              style={s.foundersSecondary}
+              onPress={() => { api.trackEvent('landing_kit_cta', {}); router.push('/pricing'); }}
+              activeOpacity={0.85}
+            >
+              <Text style={s.foundersSecondaryText}>Try the $29 Kit</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={s.foundersMicro}>30-day money-back guarantee · Stripe-secured checkout</Text>
         </View>
 
         {/* Footer */}
@@ -219,12 +245,23 @@ const s = StyleSheet.create({
   betaLinkText: { fontSize: 12, fontWeight: '600', color: Colors.gold },
   // Hero
   hero: { paddingHorizontal: 24, paddingTop: 40, paddingBottom: 48, alignItems: 'center' },
-  badge: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#14B8A6' + '15', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginBottom: 24 },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#22C55E' + '15', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginBottom: 24, borderWidth: 1, borderColor: '#22C55E' + '40' },
   badgeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#14B8A6' },
-  badgeText: { fontSize: 13, fontWeight: '700', color: '#14B8A6', letterSpacing: 0.5 },
+  badgeDotLive: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#22C55E' },
+  badgeText: { fontSize: 12, fontWeight: '800', color: '#22C55E', letterSpacing: 0.6 },
   heroTitle: { fontSize: 42, fontWeight: '900', color: '#FAFAFA', textAlign: 'center', letterSpacing: -2, lineHeight: 46, marginBottom: 20 },
   heroGold: { color: Colors.gold },
-  heroSub: { fontSize: 16, color: '#71717A', textAlign: 'center', lineHeight: 24, maxWidth: 400, paddingHorizontal: 12 },
+  heroSub: { fontSize: 16, color: '#71717A', textAlign: 'center', lineHeight: 24, maxWidth: 400, paddingHorizontal: 12, marginBottom: 28 },
+  // Hero CTAs
+  ctaRow: { flexDirection: 'row', flexWrap: 'wrap' as const, justifyContent: 'center', gap: 12, marginBottom: 18 },
+  ctaPrimary: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.gold, paddingHorizontal: 22, paddingVertical: 14, borderRadius: 12 },
+  ctaPrimaryText: { fontSize: 15, fontWeight: '900', color: '#000', letterSpacing: 0.3 },
+  ctaSecondary: { paddingHorizontal: 22, paddingVertical: 14, borderRadius: 12, borderWidth: 1.5, borderColor: '#2E2E35', backgroundColor: '#111113' },
+  ctaSecondaryText: { fontSize: 15, fontWeight: '800', color: '#FAFAFA' },
+  // Trust badges
+  trustRow: { flexDirection: 'row', flexWrap: 'wrap' as const, justifyContent: 'center', gap: 14, marginBottom: 18 },
+  trustBadge: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  trustText: { fontSize: 12, fontWeight: '600', color: '#A1A1AA' },
   // Social proof
   socialProof: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 20, backgroundColor: '#111113', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#1F1F23' },
   socialDots: { flexDirection: 'row' },
@@ -264,6 +301,18 @@ const s = StyleSheet.create({
   statBox: { alignItems: 'center' },
   statValue: { fontSize: 32, fontWeight: '900', color: Colors.gold },
   statLabel: { fontSize: 11, color: '#71717A', textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 },
+  // Founders Banner
+  foundersBanner: { marginHorizontal: 24, marginVertical: 32, padding: 28, borderRadius: 18, backgroundColor: '#1A1209', borderWidth: 2, borderColor: Colors.gold + '50', alignItems: 'center' },
+  foundersBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#dc2626', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, marginBottom: 14 },
+  foundersBadgeText: { fontSize: 10, fontWeight: '900', color: '#fff', letterSpacing: 1 },
+  foundersTitle: { fontSize: 26, fontWeight: '900', color: '#FAFAFA', textAlign: 'center', letterSpacing: -0.6, lineHeight: 32, marginBottom: 10 },
+  foundersSub: { fontSize: 14, color: '#A1A1AA', textAlign: 'center', lineHeight: 20, marginBottom: 22, paddingHorizontal: 6 },
+  foundersBtnRow: { flexDirection: 'row', flexWrap: 'wrap' as const, gap: 10, justifyContent: 'center', marginBottom: 12, width: '100%' },
+  foundersPrimary: { backgroundColor: Colors.gold, paddingHorizontal: 22, paddingVertical: 14, borderRadius: 12, alignItems: 'center', minWidth: 160, flex: 1, maxWidth: 220 },
+  foundersPrimaryText: { fontSize: 15, fontWeight: '900', color: '#000' },
+  foundersSecondary: { backgroundColor: 'transparent', paddingHorizontal: 22, paddingVertical: 14, borderRadius: 12, borderWidth: 1.5, borderColor: '#3F3F46', alignItems: 'center', minWidth: 130, flex: 1, maxWidth: 200 },
+  foundersSecondaryText: { fontSize: 14, fontWeight: '800', color: '#FAFAFA' },
+  foundersMicro: { fontSize: 11, color: '#71717A', textAlign: 'center', fontWeight: '600' },
   // Footer
   footer: { alignItems: 'center', paddingVertical: 32, gap: 6 },
   footerDomain: { fontSize: 14, fontWeight: '800', color: '#FAFAFA', letterSpacing: 0.5 },
