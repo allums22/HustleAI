@@ -130,6 +130,30 @@ export default function RegisterScreen() {
                 <Text style={styles.submitBtnText}>Create Account</Text>
               )}
             </TouchableOpacity>
+
+            {Platform.OS === 'web' && (
+              <>
+                <View style={styles.dividerRow}>
+                  <View style={styles.divLine} />
+                  <Text style={styles.divText}>OR</Text>
+                  <View style={styles.divLine} />
+                </View>
+                <TouchableOpacity
+                  testID="google-signin-btn"
+                  style={styles.googleBtn}
+                  onPress={() => {
+                    if (typeof window !== 'undefined') {
+                      const redirectUrl = encodeURIComponent(window.location.origin + '/auth-callback');
+                      window.location.href = `https://auth.emergentagent.com/?redirect=${redirectUrl}`;
+                    }
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="logo-google" size={18} color="#EA4335" />
+                  <Text style={styles.googleBtnText}>Continue with Google</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
 
           <View style={styles.footer}>
@@ -164,4 +188,9 @@ const styles = StyleSheet.create({
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, marginTop: 32 },
   footerText: { fontSize: 14, color: Colors.textSecondary },
   footerLink: { fontSize: 14, fontWeight: '700', color: Colors.trustBlue },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 18 },
+  divLine: { flex: 1, height: 1, backgroundColor: Colors.border },
+  divText: { fontSize: 11, fontWeight: '700', color: Colors.textTertiary, letterSpacing: 1.2 },
+  googleBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, paddingVertical: 14, borderRadius: 12, marginTop: 14 },
+  googleBtnText: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
 });

@@ -478,10 +478,24 @@ frontend:
 
 test_plan:
   current_focus:
-    - "Register page — missing Continue with Google button"
+    - "Register page — missing Continue with Google button (still missing per re-test)"
+    - "NDA gate intercepts /dashboard and pricing CTAs after login"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+frontend:
+  - task: "PRE-LAUNCH QA — LOGGED-IN flows (re-run)"
+    implemented: true
+    working: false
+    file: "/app/frontend/app/register.tsx, /app/frontend/app/(tabs)/dashboard.tsx, /app/frontend/app/nda.tsx, /app/frontend/app/pricing.tsx"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: false
+          agent: "testing"
+          comment: "❌ TWO P1 BLOCKERS FOUND DURING LOGGED-IN QA RE-RUN (mobile 390x844, http://localhost:3000). (1) REGISTER GOOGLE BUTTON STILL MISSING — /register does NOT render testID='google-signin-btn'. The fix the main agent claimed was applied is NOT live. Re-verify register.tsx contains the Google button block. (2) NDA REDIRECT BLOCKS DASHBOARD + STRIPE CTAs — after successful login (test5@hustleai.com / Test123!), user is redirected to /nda instead of /dashboard. Subsequent navigation to /dashboard also forced to /nda. Critically, clicking pricing CTAs (lifetime-buy-btn, instant-kit-buy-btn) while logged-in ALSO redirects to /nda, so we COULD NOT verify cs_live_ Stripe URLs end-to-end for logged-in checkout. Profile (/profile) and most other tabs render fine — only /dashboard + /pricing are NDA-gated for this account. Need to either (a) auto-accept NDA for existing test users, or (b) add a flow for the NDA gate to be passed. WHAT WORKED: Profile (/profile) loads with email test5@hustleai.com, tier=Free, achievements 2/12, Refer & Earn card, Enable Notifications card, promo input visible ✅. Hustles tab filters render correctly: Explored chip present, 'Researched' string NOT present (rename confirmed), Starter + Premium chips present, Explored empty state shows 'haven't explored' message ✅. Progress tab has Streak + Earnings sections ✅ (NOTE: 'Log Earnings' button text not detected — possible button label is just 'Log' or icon-only; minor). Community tab has Leaderboard + activity items ✅. /hustle/totally_invalid_id renders gracefully without crash ✅. NOT TESTED due to NDA gate: dashboard First $100 progress, hustle detail page (couldn't pick a card from Explored empty state), AI Marketing agent chat, HUSTLEVIP2025 promo redemption (couldn't reach as Empire flow), logged-in Stripe cs_live_ verification, sign-out flow (couldn't find Sign Out button on /profile via text scan — may need different selector). REPRO: open /login mobile, sign in with test5/Test123!, observe redirect to /nda. Open /pricing, click lifetime-buy-btn → /nda. RECOMMEND: main agent (a) re-apply Google button to /register and verify it ships, (b) decide whether NDA gate should apply to existing test accounts; if not, mark test5@hustleai.com as nda_accepted=true in DB OR auto-bypass for already-onboarded users."
 
 frontend:
   - task: "PRE-LAUNCH QA — logged-out golden path (landing, legal, pricing, register, login, edge cases)"
