@@ -12,17 +12,12 @@ import { api } from '../src/api';
 export default function HomeScreen() {
   const { user } = useAuth();
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [subscribed, setSubscribed] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [position, setPosition] = useState<number | null>(null);
-  const [totalJoined, setTotalJoined] = useState<number>(47);
-  const [errorMsg, setErrorMsg] = useState('');
+  const [seats, setSeats] = useState<{ remaining: number; limit: number; sold: number } | null>(null);
 
-  // Track landing view + fetch social proof count
+  // Track landing view + fetch real founders seat count for honest social proof
   useEffect(() => {
     api.trackEvent('landing_view', { path: '/' });
-    api.getWaitlistCount().then((r: any) => setTotalJoined(r.total || 47)).catch(() => {});
+    api.getFoundersSeats().then((r: any) => setSeats(r)).catch(() => {});
   }, []);
 
   // If already logged in, go to dashboard
@@ -30,28 +25,6 @@ export default function HomeScreen() {
     router.replace('/(tabs)/dashboard');
     return null;
   }
-
-  const handleNotify = async () => {
-    const trimmed = email.trim().toLowerCase();
-    if (!trimmed.includes('@') || !trimmed.includes('.')) {
-      setErrorMsg('Please enter a valid email');
-      return;
-    }
-    setErrorMsg('');
-    setSubmitting(true);
-    try {
-      const res: any = await api.subscribeWaitlist(trimmed, 'landing');
-      setSubscribed(true);
-      setPosition(res.position || null);
-      setTotalJoined(res.total_joined || totalJoined + 1);
-      setEmail('');
-      api.trackEvent('waitlist_subscribed', { email: trimmed });
-    } catch (e: any) {
-      setErrorMsg(e.message || 'Could not subscribe. Try again.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const handleBetaClick = () => {
     api.trackEvent('beta_invite_view', { source: 'landing_nav' });
@@ -124,17 +97,21 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* Social proof — live waitlist count */}
-          <View style={s.socialProof}>
-            <View style={s.socialDots}>
-              <View style={[s.avatarDot, { backgroundColor: '#E5A93E', marginLeft: 0 }]} />
-              <View style={[s.avatarDot, { backgroundColor: '#14B8A6', marginLeft: -8 }]} />
-              <View style={[s.avatarDot, { backgroundColor: '#EC4899', marginLeft: -8 }]} />
+          {/* Social proof — real Founders seats remaining (no inflation) */}
+          {seats && seats.remaining > 0 && (
+            <View style={s.socialProof}>
+              <View style={s.liveDot} />
+              <Text style={s.socialText}>
+                <Text style={s.socialNumber}>{seats.remaining}</Text> of {seats.limit} Founders seats left
+              </Text>
             </View>
-            <Text style={s.socialText}>
-              <Text style={s.socialNumber}>{totalJoined.toLocaleString()}</Text> hustlers already in
-            </Text>
-          </View>
+          )}
+          {seats && seats.remaining === 0 && (
+            <View style={s.socialProof}>
+              <Ionicons name="checkmark-circle" size={14} color="#22C55E" />
+              <Text style={s.socialText}>All Founders seats claimed — subscriptions still open</Text>
+            </View>
+          )}
         </View>
 
         {/* Feature Preview Cards */}
@@ -263,7 +240,8 @@ const s = StyleSheet.create({
   trustBadge: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   trustText: { fontSize: 12, fontWeight: '600', color: '#A1A1AA' },
   // Social proof
-  socialProof: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 20, backgroundColor: '#111113', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#1F1F23' },
+  socialProof: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, backgroundColor: '#111113', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#1F1F23' },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#22C55E' },
   socialDots: { flexDirection: 'row' },
   avatarDot: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#050505' },
   socialText: { fontSize: 12, fontWeight: '600', color: '#A1A1AA' },

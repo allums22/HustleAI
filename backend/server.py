@@ -2262,8 +2262,10 @@ async def waitlist_subscribe(req: WaitlistSignup):
 async def waitlist_count():
     """Public — shows social proof count on landing page."""
     count = await db.waitlist.count_documents({})
-    # Add baseline of 47 for social proof (real beta testers + early signups)
-    return {"total": count + 47}
+@api_router.get("/waitlist/count")
+async def waitlist_count():
+    count = await db.waitlist.count_documents({})
+    return {"total": count}
 
 
 # ─── 🔒 RATE LIMITING (Tier 3 security pass) ───
@@ -2325,6 +2327,125 @@ async def admin_email_dispatch_now(user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Empire tier only")
     sent = await _dispatch_pending_emails()
     return {"status": "ok", "sent": sent}
+
+
+# Admin: Full funnel + revenue dashboard
+@api_router.get("/admin/funnel")
+async def admin_funnel(user: dict = Depends(get_current_user)):
+    if user.get("subscription_tier") != "empire":
+        raise HTTPException(status_code=403, detail="Empire tier only")
+    now = datetime.now(timezone.utc)
+    today_iso = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    week_iso = (now - timedelta(days=7)).isoformat()
+    month_iso = (now - timedelta(days=30)).isoformat()
+
+    # User counts
+    total_users = await db.users.count_documents({})
+    users_today = await db.users.count_documents({"created_at": {"$gte": today_iso}})
+    users_7d = await db.users.count_documents({"created_at": {"$gte": week_iso}})
+    users_30d = await db.users.count_documents({"created_at": {"$gte": month_iso}})
+
+    # Tier breakdown
+    tier_breakdown = {}
+    for t in ["free", "starter", "pro", "empire"]:
+        tier_breakdown[t] = await db.users.count_documents({"subscription_tier": t})
+    lifetime_users = await db.users.count_documents({"lifetime_access": True})
+
+    # Funnel steps
+    visitors = await db.analytics_events.count_documents({"event": "landing_view"})
+    signups = total_users
+    questionnaire_done = await db.users.count_documents({"questionnaire_completed": True})
+    has_hustles_users = len(await db.side_hustles.distinct("user_id"))
+    plans_generated_users = len(await db.business_plans.distinct("user_id"))
+    paid_users = await db.users.count_documents({
+        "$or": [{"subscription_tier": {"$in": ["starter", "pro", "empire"]}},
+                {"lifetime_access": True}]
+    })
+
+    # Revenue
+    paid_txns = await db.payment_transactions.find(
+        {"payment_status": "paid"}, {"_id": 0}
+    ).to_list(2000)
+    total_revenue = sum(float(t.get("amount", 0)) for t in paid_txns)
+    revenue_today = sum(float(t.get("amount", 0)) for t in paid_txns
+                        if (t.get("updated_at") or t.get("created_at", "")) >= today_iso)
+    revenue_7d = sum(float(t.get("amount", 0)) for t in paid_txns
+                     if (t.get("updated_at") or t.get("created_at", "")) >= week_iso)
+    revenue_30d = sum(float(t.get("amount", 0)) for t in paid_txns
+                      if (t.get("updated_at") or t.get("created_at", "")) >= month_iso)
+
+    # Revenue by plan
+    revenue_by_plan = {}
+    txn_count_by_plan = {}
+    for t in paid_txns:
+        plan = t.get("plan_name", "unknown")
+        revenue_by_plan[plan] = revenue_by_plan.get(plan, 0) + float(t.get("amount", 0))
+        txn_count_by_plan[plan] = txn_count_by_plan.get(plan, 0) + 1
+
+    # Recent transactions
+    recent_txns = await db.payment_transactions.find(
+        {"payment_status": "paid"}, {"_id": 0}
+    ).sort("updated_at", -1).limit(20).to_list(20)
+    recent_txns_sanitized = []
+    for t in recent_txns:
+        u = await db.users.find_one({"user_id": t.get("user_id")},
+                                     {"_id": 0, "email": 1, "name": 1})
+        recent_txns_sanitized.append({
+            "amount": t.get("amount"),
+            "plan": t.get("plan_name"),
+            "billing": t.get("billing"),
+            "user_email": (u or {}).get("email", "—"),
+            "user_name": (u or {}).get("name", "—"),
+            "at": t.get("updated_at") or t.get("created_at"),
+        })
+
+    # Founders seats
+    seats_sold = await db.payment_transactions.count_documents(
+        {"plan_name": "lifetime", "payment_status": "paid"}
+    )
+
+    # Email queue status
+    email_pending = await db.email_queue.count_documents({"status": "pending"})
+    email_sent = await db.email_queue.count_documents({"status": "sent"})
+    email_failed = await db.email_queue.count_documents({"status": "failed"})
+
+    # Waitlist
+    waitlist_count = await db.waitlist.count_documents({})
+
+    return {
+        "as_of": now.isoformat(),
+        "users": {
+            "total": total_users, "today": users_today,
+            "last_7d": users_7d, "last_30d": users_30d,
+            "by_tier": tier_breakdown, "lifetime": lifetime_users,
+        },
+        "funnel": {
+            "visitors": visitors, "signups": signups,
+            "questionnaire": questionnaire_done,
+            "first_hustle": has_hustles_users,
+            "first_plan": plans_generated_users,
+            "paid": paid_users,
+            "signup_rate": round((signups / visitors * 100) if visitors else 0, 1),
+            "paid_rate": round((paid_users / signups * 100) if signups else 0, 1),
+        },
+        "revenue": {
+            "total": round(total_revenue, 2),
+            "today": round(revenue_today, 2),
+            "last_7d": round(revenue_7d, 2),
+            "last_30d": round(revenue_30d, 2),
+            "by_plan": {k: round(v, 2) for k, v in revenue_by_plan.items()},
+            "txn_count_by_plan": txn_count_by_plan,
+            "txn_total": len(paid_txns),
+        },
+        "founders_seats": {
+            "sold": seats_sold,
+            "limit": FOUNDERS_LIFETIME_SEAT_LIMIT,
+            "remaining": max(0, FOUNDERS_LIFETIME_SEAT_LIMIT - seats_sold),
+        },
+        "recent_transactions": recent_txns_sanitized,
+        "email_queue": {"pending": email_pending, "sent": email_sent, "failed": email_failed},
+        "waitlist_count": waitlist_count,
+    }
 
 async def schedule_welcome_emails(user_id: str, email: str, name: str):
     """Queue Day 1/3/7/14 emails. Day 1 fires immediately; rest are queued for the worker."""

@@ -182,4 +182,7 @@ export const api = {
 
   // 🔥 Founders Lifetime + Instant Kit
   getFoundersSeats: () => fetch(`${BACKEND_URL}/api/founders/seats`).then(r => r.json()),
+
+  // 📊 Admin
+  getAdminFunnel: () => request('/api/admin/funnel'),
 };
