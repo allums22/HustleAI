@@ -477,10 +477,40 @@ frontend:
         - comment: "✅ BREAKOUT FRONTEND E2E FULL PASS (mobile 390x844, Empire session token sess_02b7e25f5bf24900abc602309216532a). (1) Dashboard /dashboard — First $100 Unlocked! card renders near top with trophy emoji + subtitle '$600 earned in 3 days — you're officially a hustler.' ✅. (2) Live Activity feed renders below Recent Hustles with 'Community →' link and 5 rows showing 🎉/💰/🚀 emojis ('Adrian hit milestone: First $100', 'AA. just earned $500 from Investor Pitch Deck...', 'James just joined HustleAI', etc.) ✅. (3) Share Your Hustle Archetype banner renders with 🎯 emoji + title 'Share Your Hustle Archetype' + subtitle 'Show friends what HustleAI discovered about you' ✅. (4) Daily AI Check-In Modal — did NOT auto-pop because backend dedup correctly recognized Adrian already checked in today (confirmed by backend testing earlier; GET /api/coach/checkin/today returned checked_in:true). Expected behavior — not a bug. Component implementation verified via code; modal conditional gated on !checked_in_today. (5) Community /community — Wins tab + Leaderboard tab both render ✅. Clicking Leaderboard shows 'This Month's Top Earners' header + gold 'You're #1' badge + 🥇 Adrian A. (you) EMPIRE $600 2 wins (row highlighted gold) + 🥈 Iteration 5. FREE $126 + 🥉 Iteration 5. FREE $126 ✅. (6) Public Scorecard /s/{id} (NO AUTH) — route works correctly. Test's specific ID sc_4eb73bb6fc returned graceful 'Scorecard Not Found' + 'Take the Quiz' CTA (stale ID, not a bug). Verified with valid ID sc_9bab50ce11: renders HustleAI brand, 'ADRIAN'S HUSTLE ARCHETYPE' eyebrow, 🔨 + 'Skilled Craftsperson' title, 'Your hands-on skills are in high demand.' description, 3 meta pills (10-20 hrs/wk, $5000+, 12 matches), 'Top 3 Hustle Matches' with #1/#2/#3 badges, gold 'Share My Scorecard' button, 'Discover Your Own Archetype' CTA card + 'Take the Quiz (Free) →' button, '👁 4 views' counter, 'hustleai.live · A nexus28 product' footer ✅. REGRESSION: dashboard $600 earnings snapshot ✅, Today's Tasks with 3 task rows ✅, Profile /profile achievements 7/12 ✅, Hustles lists 66 total ✅. NO CRITICAL OR BLOCKING ISSUES."
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Register page — missing Continue with Google button"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+frontend:
+  - task: "PRE-LAUNCH QA — logged-out golden path (landing, legal, pricing, register, login, edge cases)"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/index.tsx, /app/frontend/app/legal/*, /app/frontend/app/pricing.tsx, /app/frontend/app/register.tsx, /app/frontend/app/login.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "✅ PRE-LAUNCH QA PASS (mobile 390x844, logged out) — 19/20 checks green. LANDING (/): hero+branding rendered ✅; footer has all 4 legal links Terms/Privacy/Refund Policy/Contact ✅; clicking Terms navigates to /legal/terms ✅. LEGAL PAGES: /legal/terms loads with 12 numbered sections ✅; /legal/privacy loads with 13 numbered sections ✅; /legal/refund-policy mentions 30-day guarantee ✅; /legal/contact contains support@hustleai.live ✅. PRICING (/pricing) logged-out: $149 Founders Lifetime card renders + $29 Instant Hustle Kit card renders ✅; Founders seat counter shows 'ONLY 100 OF 100 FOUNDERS SEATS LEFT' (uppercase) with gold progress bar ✅; 'OR SUBSCRIBE' divider visible ✅; Monthly/Annual toggle present ✅; Starter $9.99 visible ✅; promo code input found (1 element) ✅; Lifetime CTA testID='lifetime-buy-btn' click → /register (not Stripe — correct for logged-out) ✅; Instant Kit CTA testID='instant-kit-buy-btn' click → /register ✅. REGISTER (/register): name + email + password fields render with placeholders 'John Doe', 'you@example.com', 'Min 6 characters' ✅; empty submit shows red error 'Please fill in all fields' ✅. LOGIN (/login): testID='google-signin-btn' visible ✅. EDGE CASES: logged-out /dashboard redirects to landing (no red-screen) ✅; /hustle/invalid_id_xyz renders gracefully without crash ✅. HUSTLES tab: 'Researched' text NOT present (rename to Explored confirmed at the surface text level) ✅."
+
+  - task: "PRE-LAUNCH QA — Register page missing Continue with Google button"
+    implemented: false
+    working: false
+    file: "/app/frontend/app/register.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: false
+          agent: "testing"
+          comment: "❌ P1 BUG (must-fix for launch). Spec calls for 'Continue with Google button visible' on /register, matching the existing button on /login. Verified mobile 390x844 screenshot of /register shows only Full Name, Email, Password and 'Create Account' button — no Google button, no OR divider. /login has the Google button (testID='google-signin-btn') but /register does not. RECOMMEND: copy the Google sign-in block from login.tsx (Ionicons logo-google #EA4335 + 'Continue with Google' text + 'OR' divider + handleGoogleSignIn redirect to https://auth.emergentagent.com/) and mount it above or below the Create Account submit. WHERE: route /register, expected vs actual: expected Google CTA visible, actual not present. STEPS: open /register on mobile, observe form has only email/password fields and a single Create Account button."
+
+agent_communication:
+    - agent: "testing"
+    - message: "✅ PRE-LAUNCH QA (logged-out portion) COMPLETE — 19/20 surface checks green. ONE P1 BUG FOUND: /register is missing the 'Continue with Google' button that /login has. Spec explicitly calls for it. Fix: copy the Google sign-in block (testID='google-signin-btn' + OR divider) from login.tsx into register.tsx. ALL OTHER LOGGED-OUT FLOWS VERIFIED OK: landing hero, footer legal links (all 4), legal pages load with correct content (Terms 12 sections, Privacy 13 sections, Refund 30-day, Contact support@hustleai.live), pricing page renders both new $149 Founders Lifetime + $29 Instant Hustle Kit cards with seat counter '100 of 100 FOUNDERS SEATS LEFT', OR SUBSCRIBE divider, Monthly/Annual toggle, promo input, Login Google button. Both Lifetime and Instant Kit CTAs correctly redirect logged-out users to /register (NOT to Stripe — confirms gating is in place). Edge cases pass: logged-out /dashboard redirects to landing, /hustle/invalid_id_xyz renders without red-screen crash. Empty register submit shows 'Please fill in all fields' validation. Hustles tab text no longer mentions 'Researched' (rename to 'Explored' confirmed). NOT TESTED (out of browser-automation budget — main agent or follow-up run needed): full registration→/welcome→questionnaire→dashboard flow, dashboard live data + First $100 progress bar, My Hustles filter chips (All/Explored/Starter/Premium), Hustle Detail business plan + launch kit + 4 AI Agent tabs, Stripe cs_live_ URL verification while logged-in, Profile achievements + HUSTLEVIP2025 promo redemption, Progress 'Log Earnings' modal, Community leaderboard + public scorecards. ⚠️ STRIPE LIVE — never completed any actual checkout; only verified click-routing of CTAs."
 
 backend:
   - task: "Resend email integration (welcome series + receipts + worker)"
