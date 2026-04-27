@@ -40,11 +40,8 @@ export default function DashboardScreen() {
       ]);
       setProfile(profileRes);
       setHustles(hustlesRes.hustles || []);
-      // Beta NDA check
-      try {
-        const ndaRes = await api.getNdaStatus();
-        if (!ndaRes.accepted) { router.replace('/nda'); return; }
-      } catch {}
+      // NDA gate removed for commercial launch — paying customers shouldn't see legal interstitial.
+      // /nda route still exists for manual beta tester onboarding if needed.
       // If no hustles, user hasn't completed questionnaire — send to welcome
       if ((hustlesRes.hustles || []).length === 0) {
         router.replace('/welcome');
