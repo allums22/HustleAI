@@ -17,6 +17,8 @@ export default function RootLayout() {
         <Stack.Screen name="welcome" options={{ gestureEnabled: false }} />
         <Stack.Screen name="questionnaire" options={{ gestureEnabled: false }} />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="admin" />
+        <Stack.Screen name="legal" />
         <Stack.Screen name="hustle/[id]" />
         <Stack.Screen name="launch-page/[id]" />
         <Stack.Screen name="pricing" />
