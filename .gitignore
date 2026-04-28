@@ -98,3 +98,7 @@ credentials.json
 *.pem
 *.key
 .credentials
+
+# Allow .env.example as a deploy template
+!.env.example
+!**/.env.example
