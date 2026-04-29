@@ -102,3 +102,12 @@ credentials.json
 # Allow .env.example as a deploy template
 !.env.example
 !**/.env.example
+-e 
+# Environment and credential files
+.env
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials
