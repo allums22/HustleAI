@@ -105,6 +105,7 @@ export default function PricingScreen() {
 
   const handleUpgrade = async (planKey: string) => {
     if (planKey === 'free' || planKey === currentTier) return;
+    if (!user) { router.push('/register'); return; }
     setLoadingPlan(planKey);
     try {
       const originUrl = Platform.OS === 'web' ? window.location.origin : '';
@@ -119,6 +120,13 @@ export default function PricingScreen() {
       }
     } catch (e: any) { alert(e.message || 'Checkout failed'); }
     finally { setLoadingPlan(null); }
+  };
+
+  // Pay Per Item handlers — all need a hustle context, so route to dashboard
+  const handlePayPerItem = (itemType: string) => {
+    if (!user) { router.push('/register'); return; }
+    // All a-la-carte items require selecting a hustle first
+    router.push('/(tabs)/dashboard');
   };
 
   const formatPrice = (plan: any) => {
@@ -393,21 +401,36 @@ export default function PricingScreen() {
           <View style={styles.dividerRow}><View style={styles.dividerLine} /><Text style={styles.dividerText}>pay per item</Text><View style={styles.dividerLine} /></View>
           <Text style={styles.alacarteNote}>Agents are chat only — no plans or kits included</Text>
           <View style={styles.alacarteRow}>
-            <View style={styles.alacarteCard}>
+            <TouchableOpacity
+              testID="alacarte-business-plan"
+              style={styles.alacarteCard}
+              onPress={() => handlePayPerItem('business_plan')}
+              activeOpacity={0.75}
+            >
               <Ionicons name="document-text" size={22} color={Colors.trustBlue} />
               <Text style={styles.alacarteTitle}>Business Plan</Text>
               <Text style={styles.alacartePrice}>$4.99</Text>
               <Text style={styles.alacartePer}>each</Text>
-            </View>
-            <View style={styles.alacarteCard}>
+            </TouchableOpacity>
+            <TouchableOpacity
+              testID="alacarte-single-agent"
+              style={styles.alacarteCard}
+              onPress={() => handlePayPerItem('single_agent')}
+              activeOpacity={0.75}
+            >
               <Ionicons name="sparkles" size={22} color={Colors.orangeCTA} />
               <Text style={styles.alacarteTitle}>Single Agent</Text>
               <Text style={styles.alacartePrice}>$9.99</Text>
               <Text style={styles.alacartePer}>/mo each</Text>
-            </View>
+            </TouchableOpacity>
           </View>
           {/* Agent Pack */}
-          <View style={styles.agentPack}>
+          <TouchableOpacity
+            testID="alacarte-agent-pack"
+            style={styles.agentPack}
+            onPress={() => handlePayPerItem('agent_pack')}
+            activeOpacity={0.75}
+          >
             <View style={styles.agentPackBadge}><Text style={styles.agentPackBadgeText}>SAVE 33%</Text></View>
             <View style={styles.agentPackRow}>
               <View style={{ flex: 1 }}>
@@ -424,7 +447,7 @@ export default function PricingScreen() {
                 <Text style={styles.agentPackPrice}>$19.99<Text style={styles.agentPackMo}>/mo</Text></Text>
               </View>
             </View>
-          </View>
+          </TouchableOpacity>
           <View style={styles.valueNudge}>
             <Ionicons name="bulb-outline" size={14} color={Colors.gold} />
             <Text style={styles.valueNudgeText}>
