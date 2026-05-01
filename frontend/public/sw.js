@@ -1,12 +1,12 @@
-// HustleAI Service Worker — v1.0.0
+// HustleAI Service Worker — v1.1.0 (icon refresh)
 // Gives installability + basic offline shell + cache-first assets
 
-const CACHE_NAME = 'hustleai-v1';
+const CACHE_NAME = 'hustleai-v2';
 const PRECACHE_URLS = [
   '/',
   '/manifest.json',
-  '/assets/images/icon.png',
-  '/assets/images/favicon.png',
+  '/assets/images/icon.png?v=2',
+  '/assets/images/favicon.png?v=2',
 ];
 
 // Install — precache the app shell
