@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
 import { api } from '../../src/api';
 import { Colors } from '../../src/colors';
+import { InstallButton } from '../../src/components/InstallButton';
 
 export default function DashboardScreen() {
   const { user, refreshUser } = useAuth();
@@ -290,6 +291,11 @@ export default function DashboardScreen() {
             </Text>
             <Text style={styles.statLabel}>{tier === 'empire' ? 'Unlimited' : tier === 'pro' ? 'Unlimited' : tier === 'free' && !trialUsed ? 'Free Trial' : 'Remaining'}</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* 📲 One-click Install App banner — web only, hides if already installed */}
+        <View style={styles.installBanner}>
+          <InstallButton variant="secondary" label="📲 Install HustleAI on your phone" fullWidth />
         </View>
 
         {/* Earnings Snapshot */}
@@ -648,6 +654,7 @@ const styles = StyleSheet.create({
   nicheDesc: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
   // Earnings snapshot
   earningsCard: { marginHorizontal: 24, marginTop: 16, backgroundColor: Colors.surface, borderRadius: 14, padding: 16, borderWidth: 1.5, borderColor: Colors.gold + '40', maxWidth: 1000, alignSelf: 'center', width: '100%' },
+  installBanner: { marginHorizontal: 24, marginTop: 12, alignItems: 'center', maxWidth: 1000, alignSelf: 'center', width: '100%' },
   earningsHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
   earningsIconBox: { width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.orangeLight, justifyContent: 'center', alignItems: 'center' },
   earningsLabel: { fontSize: 11, fontWeight: '700', color: Colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5 },

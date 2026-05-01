@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../src/colors';
+import { InstallButton } from '../src/components/InstallButton';
 import { useAuth } from '../src/context/AuthContext';
 import { api } from '../src/api';
 
@@ -60,7 +61,7 @@ export default function HomeScreen() {
             HustleAI discovers personalized side hustles, generates 30-day business plans, builds launch-ready landing pages, and gives you a team of AI agents to grow your income.
           </Text>
 
-          {/* Primary CTAs — drive to register + pricing */}
+          {/* Primary CTAs — drive to register + pricing + INSTALL */}
           <View style={s.ctaRow}>
             <TouchableOpacity
               testID="hero-get-started-btn"
@@ -80,6 +81,9 @@ export default function HomeScreen() {
               <Text style={s.ctaSecondaryText}>See Founders Pricing</Text>
             </TouchableOpacity>
           </View>
+
+          {/* 📲 Install App — one-click PWA install (web only, hides on standalone) */}
+          <InstallButton variant="secondary" label="📲 Install HustleAI App" />
 
           {/* Trust badges */}
           <View style={s.trustRow}>
