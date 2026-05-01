@@ -2262,9 +2262,6 @@ async def waitlist_subscribe(req: WaitlistSignup):
 async def waitlist_count():
     """Public — shows social proof count on landing page."""
     count = await db.waitlist.count_documents({})
-@api_router.get("/waitlist/count")
-async def waitlist_count():
-    count = await db.waitlist.count_documents({})
     return {"total": count}
 
 
