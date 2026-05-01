@@ -483,6 +483,20 @@ test_plan:
   test_priority: "high_first"
 
 frontend:
+  - task: "EXHAUSTIVE PRE-LAUNCH FRONTEND REGRESSION (logged-out + logged-in Free smoke)"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/pricing.tsx, /app/frontend/app/(tabs)/dashboard.tsx, /app/frontend/app/(tabs)/profile.tsx, /app/frontend/app/(tabs)/hustles.tsx, /app/frontend/app/legal/*"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "✅ EXHAUSTIVE PRE-LAUNCH QA — 17/17 critical checks PASS (mobile 390x844, http://localhost:3000). PREVIOUSLY-BROKEN PRICING CTAs ALL FIXED: (16) Subscription tier upgrade (Get Started/Upgrade to X/Go Empire) → /register ✅; (17a) alacarte-business-plan → /register ✅; (17b) alacarte-single-agent → /register ✅; (17c) alacarte-agent-pack → /register ✅; (10) lifetime-buy-btn → /register ✅; (11) instant-kit-buy-btn → /register ✅. NO 'Not authenticated' alerts — all four pricing handlers (handleLifetimeBuy, handleInstantKit, handleUpgrade, handlePayPerItem in /app/frontend/app/pricing.tsx lines 86-130) correctly check `if (!user) router.push('/register')`. PROMO CODES: HUSTLE50 → '✓ 50% off first month applied' ✅; INVALIDXYZ → 'Invalid promo code' ✅. BILLING TOGGLE: Monthly/Annual swaps prices ✅. LANDING (/): hero contains 'LIVE', 'Founders', and seat counter '100 of 100 Founders seats left' ✅. LEGAL pages (/legal/terms, /privacy, /refund-policy, /contact): all 4 load with content ✅. LOGIN: test5@hustleai.com/Test123! → /dashboard ✅. HUSTLES tab: filter chips Explored/Starter/Premium present, 'Researched' string fully removed ✅. PROFILE: shows email test5@hustleai.com, Free tier, Refer & Earn card, promo input, Logout button, 24 hustles ✅. NO console errors, NO page errors. STRIPE LIVE: not exercised in this run (per user instruction to never complete checkout); previous QA + backend tests confirmed cs_live_ session URLs returned for /payments/create-checkout. NOT RE-TESTED in this run (verified in prior runs per test_result.md history): registration submission flow (avoids extra welcome emails), full hustle detail business plan/launch kit/AI agent gating, Empire user flows (admin dashboard, all 4 AI agents), logged-in Stripe redirect verification, Quick Check-In auto-pop, push notification toggle. Pricing CTAs were the highest-risk previously-broken regression and they are now fully production-ready."
+
+
+frontend:
   - task: "FOCUSED LOGGED-IN QA RE-RUN (A–F) — Register Google, NDA removed, Hustle/Agent, Stripe cs_live_, Promo, Sign Out"
     implemented: true
     working: true
