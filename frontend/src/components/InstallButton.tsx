@@ -143,17 +143,17 @@ export function InstallButton({ variant = 'primary', label, fullWidth = false }:
               </View>
             ) : (
               <View style={s.steps}>
-                <Step n={1} icon="ellipsis-vertical" iconColor={Colors.textPrimary} text="Tap the three-dot menu (⋮) at the top-right of Chrome" />
-                <Step n={2} icon="download-outline" iconColor={Colors.gold} text="Tap 'Install app' (look for the download icon)" />
-                <Step n={3} icon="checkmark-circle" iconColor={Colors.growthGreen} text="Tap 'Install' — the branded HustleAI icon appears on your home screen" />
+                <Step n={1} icon="phone-portrait-outline" iconColor={Colors.gold} text="Stay on the HustleAI homepage for ~30 seconds" />
+                <Step n={2} icon="notifications-outline" iconColor={Colors.gold} text="Watch for a small 'Install HustleAI' banner that pops up at the bottom" />
+                <Step n={3} icon="checkmark-circle" iconColor={Colors.growthGreen} text="Tap 'Install' on that banner — the branded HustleAI app installs to your home screen" />
               </View>
             )}
 
             {!isIos() && (
               <View style={s.warningBox}>
-                <Ionicons name="warning" size={16} color="#FFB020" />
+                <Ionicons name="information-circle" size={16} color="#FFB020" />
                 <Text style={s.warningText}>
-                  <Text style={{ fontWeight: '900' }}>Do NOT tap "Add to Home Screen"</Text> — that creates a Chrome shortcut, not the real app. Use <Text style={{ fontWeight: '900', color: Colors.gold }}>"Install app"</Text> instead.
+                  <Text style={{ fontWeight: '900' }}>Don't use Chrome's three-dot menu</Text> — it only creates a widget, not the real app. Wait for Chrome's automatic install banner instead.
                 </Text>
               </View>
             )}
