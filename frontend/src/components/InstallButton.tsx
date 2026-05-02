@@ -143,9 +143,18 @@ export function InstallButton({ variant = 'primary', label, fullWidth = false }:
               </View>
             ) : (
               <View style={s.steps}>
-                <Step n={1} icon="ellipsis-vertical" iconColor={Colors.textPrimary} text="Tap the three-dot menu in your browser" />
-                <Step n={2} icon="add-outline" iconColor={Colors.gold} text="Tap 'Install app' or 'Add to Home Screen'" />
-                <Step n={3} icon="checkmark-circle" iconColor={Colors.growthGreen} text="Confirm — HustleAI installs as an app icon" />
+                <Step n={1} icon="ellipsis-vertical" iconColor={Colors.textPrimary} text="Tap the three-dot menu (⋮) at the top-right of Chrome" />
+                <Step n={2} icon="download-outline" iconColor={Colors.gold} text="Tap 'Install app' (look for the download icon)" />
+                <Step n={3} icon="checkmark-circle" iconColor={Colors.growthGreen} text="Tap 'Install' — the branded HustleAI icon appears on your home screen" />
+              </View>
+            )}
+
+            {!isIos() && (
+              <View style={s.warningBox}>
+                <Ionicons name="warning" size={16} color="#FFB020" />
+                <Text style={s.warningText}>
+                  <Text style={{ fontWeight: '900' }}>Do NOT tap "Add to Home Screen"</Text> — that creates a Chrome shortcut, not the real app. Use <Text style={{ fontWeight: '900', color: Colors.gold }}>"Install app"</Text> instead.
+                </Text>
               </View>
             )}
 
@@ -196,6 +205,8 @@ const s = StyleSheet.create({
   stepNumText: { fontSize: 12, fontWeight: '900', color: Colors.gold },
   stepText: { flex: 1, fontSize: 14, color: Colors.textPrimary, fontWeight: '600', lineHeight: 19 },
   benefits: { backgroundColor: Colors.surfaceElevated, borderRadius: 12, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: Colors.border },
+  warningBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#2B1E08', borderRadius: 10, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: '#FFB02055' },
+  warningText: { flex: 1, fontSize: 12.5, color: '#F5DCA0', lineHeight: 18 },
   benefitsTitle: { fontSize: 12, fontWeight: '900', color: Colors.gold, letterSpacing: 1, marginBottom: 8 },
   benefit: { fontSize: 13, color: Colors.textSecondary, lineHeight: 22 },
   modalBtn: { backgroundColor: Colors.gold, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },

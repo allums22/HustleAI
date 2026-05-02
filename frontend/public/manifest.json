@@ -2,50 +2,45 @@
   "name": "HustleAI — Your AI Team for Building Side Hustles",
   "short_name": "HustleAI",
   "description": "Discover personalized side hustles, generate 30-day business plans, launch landing pages, and grow your income with an AI team of agents.",
-  "start_url": "/",
+  "start_url": "/?source=pwa",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
   "background_color": "#000000",
   "theme_color": "#000000",
   "scope": "/",
-  "id": "/",
+  "id": "/?source=pwa",
   "lang": "en",
   "dir": "ltr",
   "categories": ["business", "productivity", "finance", "lifestyle"],
   "icons": [
     {
-      "src": "/assets/images/icon.png?v=2",
+      "src": "/assets/images/icon.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/assets/images/icon.png?v=2",
+      "src": "/assets/images/icon.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/assets/images/icon.png?v=2",
+      "src": "/assets/images/icon.png",
       "sizes": "1024x1024",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/assets/images/adaptive-icon.png?v=2",
+      "src": "/assets/images/adaptive-icon.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/assets/images/adaptive-icon.png?v=2",
+      "src": "/assets/images/adaptive-icon.png",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/assets/images/adaptive-icon.png?v=2",
-      "sizes": "1024x1024",
       "type": "image/png",
       "purpose": "maskable"
     }

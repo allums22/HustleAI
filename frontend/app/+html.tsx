@@ -17,12 +17,12 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="theme-color" content="#000000" />
 
         {/* ─── PWA Manifest + Icons ─── */}
-        <link rel="manifest" href="/manifest.json?v=2" />
-        <link rel="icon" type="image/png" href="/assets/images/favicon.png?v=2" />
-        <link rel="apple-touch-icon" href="/assets/images/icon.png?v=2" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/assets/images/icon.png?v=2" />
-        <link rel="apple-touch-icon" sizes="152x152" href="/assets/images/icon.png?v=2" />
-        <link rel="apple-touch-icon" sizes="120x120" href="/assets/images/icon.png?v=2" />
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="icon" type="image/png" href="/assets/images/favicon.png" />
+        <link rel="apple-touch-icon" href="/assets/images/icon.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/assets/images/icon.png" />
+        <link rel="apple-touch-icon" sizes="152x152" href="/assets/images/icon.png" />
+        <link rel="apple-touch-icon" sizes="120x120" href="/assets/images/icon.png" />
 
         {/* ─── Apple PWA Config ─── */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
