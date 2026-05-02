@@ -82,9 +82,6 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* 📲 Install App — one-click PWA install (web only, hides on standalone) */}
-          <InstallButton variant="secondary" label="📲 Install HustleAI App" />
-
           {/* Trust badges */}
           <View style={s.trustRow}>
             <View style={s.trustBadge}>
@@ -116,6 +113,11 @@ export default function HomeScreen() {
               <Text style={s.socialText}>All Founders seats claimed — subscriptions still open</Text>
             </View>
           )}
+
+          {/* 📲 Install App — moved below trust badges for breathing room (web only, hides on standalone) */}
+          <View style={s.installWrap}>
+            <InstallButton variant="secondary" label="📲 Install HustleAI App" />
+          </View>
         </View>
 
         {/* Feature Preview Cards */}
@@ -250,6 +252,8 @@ const s = StyleSheet.create({
   avatarDot: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#050505' },
   socialText: { fontSize: 12, fontWeight: '600', color: '#A1A1AA' },
   socialNumber: { color: Colors.gold, fontWeight: '800' },
+  // Install button — clear breathing room above so it doesn't crowd hero
+  installWrap: { marginTop: 22, alignSelf: 'center' as const },
   // Error
   errorMsg: { fontSize: 13, color: '#F87171', marginTop: 8, fontWeight: '600' },
   // Sneak Peek
