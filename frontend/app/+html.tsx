@@ -86,8 +86,33 @@ export default function Root({ children }: PropsWithChildren) {
                 window.addEventListener('load', function() {
                   navigator.serviceWorker.register('/sw.js').then(function(reg) {
                     console.log('[PWA] Service worker registered', reg.scope);
+                    // Check for updates every time page becomes visible
+                    document.addEventListener('visibilitychange', function() {
+                      if (document.visibilityState === 'visible') {
+                        reg.update().catch(function() {});
+                      }
+                    });
+                    // If an updated SW is waiting, activate it immediately
+                    if (reg.waiting) { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); }
+                    reg.addEventListener('updatefound', function() {
+                      var nw = reg.installing;
+                      if (!nw) return;
+                      nw.addEventListener('statechange', function() {
+                        if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+                          console.log('[PWA] New version installed — activating');
+                          nw.postMessage({ type: 'SKIP_WAITING' });
+                        }
+                      });
+                    });
                   }).catch(function(err) {
                     console.warn('[PWA] Service worker failed', err);
+                  });
+                  // When the active SW changes, reload so user sees new code
+                  var reloaded = false;
+                  navigator.serviceWorker.addEventListener('controllerchange', function() {
+                    if (reloaded) return;
+                    reloaded = true;
+                    window.location.reload();
                   });
                 });
               }
