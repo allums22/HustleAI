@@ -439,10 +439,16 @@ async def login(req: LoginRequest, request: Request):
     user = await db.users.find_one({"email": req.email}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    if user.get("auth_type") == "google":
-        raise HTTPException(status_code=400, detail="This account uses Google sign-in")
     stored_hash = user.get("password_hash", "")
-    if not stored_hash or not bcrypt.checkpw(req.password.encode('utf-8'), stored_hash.encode('utf-8')):
+    # Password login is allowed whenever the user HAS a password set,
+    # regardless of how they originally signed up (email or Google).
+    # If a Google-only user hasn't set a password yet, tell them how to sign in.
+    if not stored_hash:
+        raise HTTPException(
+            status_code=400,
+            detail="This email signed up with Google. Tap 'Continue with Google' to sign in — or set a password from Account settings after signing in.",
+        )
+    if not bcrypt.checkpw(req.password.encode('utf-8'), stored_hash.encode('utf-8')):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     session_token = create_session_token()
     await db.user_sessions.insert_one({
@@ -494,7 +500,40 @@ async def exchange_session(session_id: str):
 
 @api_router.get("/auth/me")
 async def get_me(user: dict = Depends(get_current_user)):
-    return user
+    # Return whether they have a password set, so frontend can show proper UI
+    # (get_current_user strips password_hash for security → query it separately)
+    raw = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0, "password_hash": 1})
+    has_password = bool(raw and raw.get("password_hash"))
+    out = {k: v for k, v in user.items() if k != "password_hash"}
+    out["has_password"] = has_password
+    return out
+
+class SetPasswordRequest(BaseModel):
+    current_password: Optional[str] = None  # required only if user ALREADY has a password
+    new_password: str
+
+@api_router.post("/auth/set-password")
+async def set_password(req: SetPasswordRequest, user: dict = Depends(get_current_user)):
+    """
+    Let any signed-in user set or change their password.
+    - If they signed up with Google and never set one → current_password not required.
+    - If they already have a password → current_password must match for security.
+    After calling this, the user can log in with EITHER Google OR email/password.
+    """
+    if len(req.new_password or "") < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    # Fetch password_hash separately (get_current_user strips it)
+    raw = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0, "password_hash": 1})
+    existing_hash = (raw or {}).get("password_hash", "")
+    if existing_hash:
+        if not req.current_password or not bcrypt.checkpw(req.current_password.encode('utf-8'), existing_hash.encode('utf-8')):
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
+    new_hash = bcrypt.hashpw(req.new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"password_hash": new_hash}}
+    )
+    return {"message": "Password saved. You can now sign in with email + password or with Google."}
 
 @api_router.post("/auth/logout")
 async def logout(request: Request):

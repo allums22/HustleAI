@@ -52,6 +52,19 @@ export const api = {
     request('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   exchangeSession: (sessionId: string) => request(`/api/auth/session?session_id=${sessionId}`),
   getMe: () => request('/api/auth/me'),
+  /**
+   * Set or change the account password.
+   * - current_password is only required when the user ALREADY has a password.
+   *   Google-only users (has_password=false) can set one without it.
+   */
+  setPassword: (newPassword: string, currentPassword?: string) =>
+    request('/api/auth/set-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        new_password: newPassword,
+        current_password: currentPassword || null,
+      }),
+    }),
   logout: () => request('/api/auth/logout', { method: 'POST' }),
 
   // Questionnaire

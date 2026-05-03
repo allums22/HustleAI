@@ -277,6 +277,11 @@ export default function ProfileScreen() {
             <Text style={styles.menuText}>Pricing Plans</Text>
             <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
           </TouchableOpacity>
+          <TouchableOpacity testID="password-settings-btn" style={styles.menuItem} onPress={() => router.push('/settings-password')}>
+            <View style={[styles.menuIcon, { backgroundColor: '#1F1708' }]}><Ionicons name="lock-closed" size={18} color={Colors.gold} /></View>
+            <Text style={styles.menuText}>Password & Security</Text>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
+          </TouchableOpacity>
         </View>
 
         {/* Beta Promo Code */}
