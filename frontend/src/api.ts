@@ -1,6 +1,27 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+/**
+ * Pick the correct backend URL for the runtime environment.
+ * - In the browser on the production domain (hustleai.live or any vercel.app),
+ *   return '' so fetch uses RELATIVE URLs. Vercel's rewrite rule in vercel.json
+ *   then proxies /api/* to the backend — avoiding CORS and preview-URL issues.
+ * - Otherwise (mobile Expo Go, local web dev, server-side render), fall back
+ *   to EXPO_PUBLIC_BACKEND_URL so direct requests work during development.
+ */
+function resolveBackendUrl(): string {
+  const envUrl = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+  if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+    const host = window.location.hostname;
+    const isProd =
+      host === 'hustleai.live' ||
+      host.endsWith('.hustleai.live') ||
+      host.endsWith('.vercel.app');
+    if (isProd) return ''; // relative → Vercel rewrite handles proxying
+  }
+  return envUrl;
+}
+
+const BACKEND_URL = resolveBackendUrl();
 
 async function getToken(): Promise<string | null> {
   return AsyncStorage.getItem('session_token');

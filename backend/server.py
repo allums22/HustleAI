@@ -375,6 +375,13 @@ def make_user_doc(user_id, email, name, auth_type, picture="", password_hash=Non
 # ─── AUTH ENDPOINTS ───
 @api_router.post("/auth/register")
 async def register(req: RegisterRequest):
+    # 🔒 Normalize email to lowercase to prevent duplicate accounts from case variations
+    req.email = (req.email or "").strip().lower()
+    req.name = (req.name or "").strip()
+    if not req.email or not req.password or not req.name:
+        raise HTTPException(status_code=400, detail="Email, password, and name are required")
+    if len(req.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
     existing = await db.users.find_one({"email": req.email}, {"_id": 0})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -422,6 +429,8 @@ async def register(req: RegisterRequest):
 
 @api_router.post("/auth/login")
 async def login(req: LoginRequest, request: Request):
+    # 🔒 Normalize email to lowercase so it matches registration
+    req.email = (req.email or "").strip().lower()
     # 🔒 Rate limit: 10 login attempts per 5 minutes per IP (using X-Forwarded-For for K8s ingress)
     fwd = request.headers.get("x-forwarded-for", "")
     client_ip = fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "unknown")
