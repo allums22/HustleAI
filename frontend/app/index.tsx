@@ -41,9 +41,18 @@ export default function HomeScreen() {
             <View style={s.logoDot} />
             <Text style={s.logoText}>HustleAI</Text>
           </View>
-          <TouchableOpacity style={s.betaLink} onPress={handleBetaClick}>
-            <Text style={s.betaLinkText}>Beta Tester?</Text>
-          </TouchableOpacity>
+          <View style={s.headerRight}>
+            <TouchableOpacity
+              testID="header-signin-link"
+              style={s.signInLink}
+              onPress={() => { api.trackEvent('header_cta_signin', {}); router.push('/login'); }}
+            >
+              <Text style={s.signInText}>Sign in</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.betaLink} onPress={handleBetaClick}>
+              <Text style={s.betaLinkText}>Beta Tester?</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Hero */}
@@ -224,6 +233,9 @@ const s = StyleSheet.create({
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   logoDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: Colors.gold },
   logoText: { fontSize: 20, fontWeight: '900', color: '#FAFAFA', letterSpacing: -0.5 },
+  headerRight: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  signInLink: { paddingHorizontal: 14, paddingVertical: 8 },
+  signInText: { fontSize: 13, fontWeight: '700', color: '#FAFAFA' },
   betaLink: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#2E2E35' },
   betaLinkText: { fontSize: 12, fontWeight: '600', color: Colors.gold },
   // Hero
